@@ -1,0 +1,4 @@
+int8 torpedo_number   # Which torpedo to fire (1 or 2)
+---
+bool success         # Whether the torpedo was fired successfully
+string message       # Additional information or error message

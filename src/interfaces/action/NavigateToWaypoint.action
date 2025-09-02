@@ -1,0 +1,11 @@
+# Goal
+
+geometry_msgs/Point target_point
+---
+
+# Result
+bool success       # True if the target was reached successfully, False otherwise
+---
+
+# Feedback
+float64 distance_to_target  # Current distance to the target

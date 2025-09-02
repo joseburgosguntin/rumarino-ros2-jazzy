@@ -1,0 +1,8 @@
+# SetColorFilter.srv
+float32 tolerance
+float32 min_confidence
+float32 min_area
+int32[] rgb_range
+---
+bool success
+string message
