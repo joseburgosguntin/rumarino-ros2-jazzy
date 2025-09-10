@@ -10,7 +10,7 @@ Controller::Controller() : Node("controller") {
   }
 
   int baud_rate;
-  if (!this->get_parameter("baud_rate", control_port)) {
+  if (!this->get_parameter("baud_rate", baud_rate)) {
     RCLCPP_WARN(this->get_logger(), "baud_rate not set!");
   }
 
