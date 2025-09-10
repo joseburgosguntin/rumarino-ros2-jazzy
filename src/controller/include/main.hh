@@ -3,8 +3,8 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "interfaces/action/navigate_to_waypoint.hpp"
 #include "interfaces/srv/fire_torpedo.hpp"
+#include "interfaces/msg/moving_state.hpp"
 #include "std_msgs/msg/float32.hpp"
-#include "std_msgs/msg/int16_multi_array.hpp"
 #include <fstream>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -16,9 +16,9 @@ using NavigateAction = interfaces::action::NavigateToWaypoint;
 using PoseStamped = geometry_msgs::msg::PoseStamped;
 using Twist = geometry_msgs::msg::Twist;
 using Point = geometry_msgs::msg::Point;
-using Int16MultiArray = std_msgs::msg::Int16MultiArray;
 using Float32 = std_msgs::msg::Float32;
 using TorpedoService = interfaces::srv::FireTorpedo;
+using MovingStateMsg = interfaces::msg::MovingState;
 using NavigateGoalHandle =
     std::shared_ptr<rclcpp_action::ServerGoalHandle<NavigateAction>>;
 
@@ -68,7 +68,7 @@ public:
 
   // Add publishers for controller state monitoring
   rclcpp::Publisher<Point>::SharedPtr target_point_pub;
-  rclcpp::Publisher<Int16MultiArray>::SharedPtr moving_state_pub;
+  rclcpp::Publisher<MovingStateMsg>::SharedPtr moving_state_pub;
   rclcpp::Publisher<Float32>::SharedPtr target_distance_pub;
   rclcpp::Publisher<Float32>::SharedPtr original_target_distance_pub;
   rclcpp::Publisher<Float32>::SharedPtr distance_from_start_pub;

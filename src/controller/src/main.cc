@@ -45,7 +45,7 @@ Controller::Controller() : Node("controller") {
   target_point_pub =
       this->create_publisher<Point>("/controller/target_point", 10);
   moving_state_pub =
-      this->create_publisher<Int16MultiArray>("/controller/moving_state", 10);
+      this->create_publisher<MovingStateMsg>("/controller/moving_state", 10);
   target_distance_pub =
       this->create_publisher<Float32>("/controller/target_distance", 10);
   original_target_distance_pub = this->create_publisher<Float32>(
@@ -164,9 +164,10 @@ void Controller::handle_navigate_accept(NavigateGoalHandle goal_handle) {
       target_point_pub->publish(target_point_msg);
     }
 
-    // TODO: just do multiple fields in the msg instead
-    Int16MultiArray moving_state_msg;
-    moving_state_msg.data = {moving.linear, moving.depth, moving.depth};
+    MovingStateMsg moving_state_msg;
+    moving_state_msg.linear = moving.linear;
+    moving_state_msg.rotation = moving.rotation;
+    moving_state_msg.depth = moving.depth;
     moving_state_pub->publish(moving_state_msg);
 
     // # Publish delta value (distance to target)
