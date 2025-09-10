@@ -134,7 +134,7 @@ void MissionPlanner::send_torpedo_request(int which_torpedo) {
   torpedo_client->async_send_request(request, response_received_callback);
 }
 
-void send_look_at_request(glm::vec3 pos) {
+void MissionPlanner::send_look_at_request(glm::vec3 pos) {
   // TODO
 }
 
