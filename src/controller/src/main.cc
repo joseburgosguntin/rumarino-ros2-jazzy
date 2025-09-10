@@ -43,7 +43,7 @@ Controller::Controller() : Node("controller") {
       });
 
   zed2i_sub = this->create_subscription<PoseStamped>(
-      "/detector/box_detection", 10,
+      "/zed2i/zed_node/pose", 10,
       [this](const PoseStamped::SharedPtr detections) {
         this->handle_zed2i_msg(detections);
       });
@@ -118,7 +118,7 @@ void Controller::handle_navigate_accept(NavigateGoalHandle goal_handle) {
       // RCLCPP_INFO(this->get_logger(), "Target reached.");
       result->success = true;
       goal_handle->succeed(result);
-      // //         # TODO: In real life, it might a be a good idea to make sure
+      // TODO: In real life, it might a be a good idea to make sure
       // submarine stays on point (due to buoyancy)
       this->moving = {.depth = false, .rotation = false, .linear = false};
       return;
