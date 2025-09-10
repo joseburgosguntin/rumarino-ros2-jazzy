@@ -1,6 +1,6 @@
 #include <main.hh>
 
-Controller::Controller() : Node("mission_planner") {
+Controller::Controller() : Node("controller") {
   this->declare_parameter<std::string>("control_port");
   this->declare_parameter<int>("baud_rate", 115200);
 
