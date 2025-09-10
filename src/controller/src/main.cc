@@ -14,8 +14,14 @@ Controller::Controller() : Node("controller") {
     RCLCPP_WARN(this->get_logger(), "baud_rate not set!");
   }
 
-  // TODO actually use the baud_rate
-  arduino = std::fstream(control_port);
+  std::ostringstream oss;
+  oss << "stty -F " << control_port << " " << baud_rate << " cs8 -cstopb -parenb -ixon -ixoff -crtscts";
+  system(oss.str().c_str());
+
+  arduino = std::fstream(control_port, std::ios::in | std::ios::out | std::ios::binary);
+  if (arduino.is_open()) {
+    RCLCPP_FATAL(this->get_logger(), "file not found: `%s`", control_port.c_str());
+  }
 
   navigate_server = rclcpp_action::create_server<NavigateAction>(
       this, "controller_action",
@@ -146,15 +152,8 @@ void Controller::handle_navigate_accept(NavigateGoalHandle goal_handle) {
     }
     depth_pwm /= std::size(DEPTH_MOTORS_ID);
     arduino << "D:" << depth_pwm << '\n';
-
-    // // TODO: should sending data to torpedo happen here
-    // // # Torpedo motors - send average of torpedo motor values
-    // int torpedo_pwm = 0;
-    // for (int m : TORPEDO_MOTORS_ID) {
-    //   torpedo_pwm += this->thruster_values[m - 1];
-    // }
-    // torpedo_pwm /= TORPEDO_MOTORS_LEN;
-    // arduino << "P:" << torpedo_pwm << '\n';
+    
+    arduino.flush();
 
     if (target_point_set) {
       Point target_point_msg;
