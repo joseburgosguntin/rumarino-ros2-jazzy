@@ -1,0 +1,190 @@
+<?xml version="1.0"?>
+<scenario>
+	<robot name="$(arg robot_name)" fixed="false" self_collisions="false">
+		<base_link name="Hydrus" type="compound" physics="submerged">
+			<external_part name="HydrusUnibody" type="model" physics="submerged" buoyant="true">
+				<physical>
+					<mesh filename="models/hydrus_unibody_centered.obj" scale="1.0" />
+					<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
+				</physical>
+				<material name="Plastic" />
+				<look name="green" />
+				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0" />
+			</external_part>
+		</base_link>
+
+		<ros_subscriber thrusters="/hydrus_thrusters" />
+
+		<!-- Corner Thrusters -->
+		<actuator name="thruster_front_left" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 0.0 -1.1781" xyz="0.198 0.407 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<actuator name="thruster_front_right" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 0.0 1.1781" xyz="0.198 -0.408 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<actuator name="thruster_back_left" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 0.0 -1.9635" xyz="-0.198 0.407 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<actuator name="thruster_back_right" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 0.0 1.9635" xyz="-0.198 -0.408 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<!-- Depth Thrusters -->
+		<actuator name="thruster_depth_1" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 -1.571 0.0" xyz="0.211 0.169 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<actuator name="thruster_depth_2" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 -1.571 0.0" xyz="0.211 -0.169 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<actuator name="thruster_depth_3" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 -1.571 0.0" xyz="-0.211 0.169 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<actuator name="thruster_depth_4" type="thruster">
+			<link name="Hydrus" />
+			<origin rpy="0.0 -1.571 0.0" xyz="-0.211 -0.169 0.0" />
+			<specs max_setpoint="${1000.0/60.0*2.0*pi}" inverted_setpoint="true"
+				normalized_setpoint="true" />
+			<propeller diameter="0.18" right="true">
+				<mesh filename="models/propeller.obj" scale="0.75" />
+				<material name="Plastic" />
+				<look name="propeller" />
+			</propeller>
+			<rotor_dynamics type="mechanical_pi">
+				<kp value="1.0" />
+				<ki value="10.0" />
+				<ilimit value="5.0" />
+			</rotor_dynamics>
+			<thrust_model type="fluid_dynamics">
+				<thrust_coeff forward="0.48" reverse="0.48" />
+				<torque_coeff value="0.05" />
+			</thrust_model>
+		</actuator>
+
+		<world_transform rpy="0.0 0.0 0.0" xyz="$(arg robot_position)" />
+	</robot>
+</scenario>
