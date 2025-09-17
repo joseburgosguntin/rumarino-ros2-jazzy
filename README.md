@@ -8,6 +8,35 @@
 - [x] can we move? (controller)
 - [ ] move around? (hardcode)
 
+
+## Setup 
+
+### System Dependencies
+
+```sh
+sudo dnf install ros-jazzy-desktop
+
+sudo dnf install freetype-devel
+sudo dnf install SDL2-devel
+sudo dnf install glm-devel
+```
+
+### Clone and go in repo
+```sh
+git clone --recurisve git@github.com:joseburgosguntin/rumarino-ros2-jazzy.git
+cd ./rumarino-ros2-jazzy
+```
+
+### Install Stonefish
+```sh
+cd ./vendor/stonefish
+mkdir build
+cd build
+cmake ..
+make -jX (where X is the number of threads)
+sudo make install
+```
+
 ## Build
 
 ```sh
