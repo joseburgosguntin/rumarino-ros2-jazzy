@@ -1,18 +1,12 @@
-#include "interfaces/action/navigate_to_waypoint.hpp"
 #include "interfaces/msg/detections.hpp"
-#include "interfaces/srv/fire_torpedo.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
-#include <std_msgs/msg/string.hpp>
 
 using namespace std::chrono_literals;
 using DetectionsMsg = interfaces::msg::Detections;
-using NavigateAction = interfaces::action::NavigateToWaypoint;
-using TorpedoService = interfaces::srv::FireTorpedo;
-// using LookAtService = interfaces::srv::LookAt;
-using NavigateResult =
-    rclcpp_action::ClientGoalHandle<NavigateAction>::WrappedResult;
+using Float64MultiArray = std_msgs::msg::Float64MultiArray;
 
 enum class Object {
   Cube,
@@ -32,32 +26,69 @@ const glm::vec3 OBJECT_DIMS[OBJECT_COUNT] = {
     {10, 20, 10}, // Rectangle
     {},           // Gate
 };
-const float CLOSE_ENOUGH_TO_TORPEDO = 10;    // for submarine not hit some other bounding box
-                                             //
+const float CLOSE_ENOUGH_TO_TORPEDO =
+    10; // for submarine not hit some other bounding box
+
+const auto TORPEDO_FIRE_DURATION =
+    1s; // time to keep torpedo motors at fire PWM
+
+const int TORPEDO_FIRE = (1800 - 1000) / 1000; // Value to fire torpedo
+
+const int DEPTH_ADJUST = 50 / 1000;    // PWM adjustment for depth
+const int ROTATION_ADJUST = 50 / 1000; // PWM adjustment for rotation
+const int LINEAR_ADJUST = 50 / 1000;   // PWM adjustment for linear movement
+const float DISTANCE_THRESHOLD = 0.1;
+
+// ASCII representation of the position of the thrusters:
+//
+//  1 *            * 5
+//     \          /
+//      |________|
+//  2*--|        |--* 6
+//      |        |
+//      |        |
+//  3*--|________|--* 7
+//      |        |
+//  4 */          \* 8
+//
+const int TOTAL_THRUSTERS = 8;
+// TODO: make motor id's zero indexed
+// TODO: call everything thrusters not motors if that make sense
+const int DEPTH_MOTORS_ID[] = {2, 7};
+const int FRONT_MOTORS_ID[] = {1, 5};
+const int BACK_MOTORS_ID[] = {4, 8};
+const int TORPEDO_MOTORS_ID[] = {3, 6};
 
 namespace step {
-  struct Shoot {
-    int which_torpedo;
-  };
-  struct LookAt {
-    glm::vec3 pos;
-  };
-  struct Navigate {
-    glm::vec3 pos;
-    Navigate(glm::vec3 p) : pos(p) {}
-  };
-}
+struct Shoot {
+  int which_torpedo;
+};
+struct LookAt {
+  glm::vec3 pos;
+};
+struct Navigate {
+  glm::vec3 pos;
+  Navigate(glm::vec3 p) : pos(p) {}
+};
+} // namespace step
 
 using Step = std::variant<step::Shoot, step::LookAt, step::Navigate>;
+
+struct Pose {
+  glm::vec3 pos;
+  glm::quat rot;
+};
+
+struct Moving {
+  bool depth, rotation, linear;
+};
 
 class MissionPlanner : public rclcpp::Node {
 public:
   MissionPlanner();
 
   rclcpp::Subscription<DetectionsMsg>::SharedPtr detection_sub;
-  rclcpp_action::Client<NavigateAction>::SharedPtr navigate_client;
-  rclcpp::Client<TorpedoService>::SharedPtr torpedo_client;
-  // rclcpp::Client<LookAtService>::SharedPtr look_at_client;
+  rclcpp::Publisher<Float64MultiArray>::SharedPtr thrusters_pub;
 
 private:
   glm::vec3 sub_pos = {0, 0, 0};
@@ -72,18 +103,23 @@ private:
   std::vector<Step> steps;
   int next_step_idx = 0;
 
+  float thruster_values[TOTAL_THRUSTERS];
+  Moving moving;
+  Pose sub_pose;
+
   void handle_dectections_msg(const DetectionsMsg::SharedPtr detections);
 
   void plan_and_start_task(Object object, glm::vec3 pos);
 
-  void send_navigate_goal(glm::vec3 pos);
-  void send_torpedo_request(int which_torpedo);
-  void send_look_at_request(glm::vec3 pos);
-
-  // figure out how to make this into `start_next_step` without doing weird recursion
+  // figure out how to make this into `start_next_step` without doing weird
+  // recursion
   void send_step(Step step);
 
-  void handle_navigate_result(NavigateResult result);
-  void handle_torpedo_response(TorpedoService::Response::SharedPtr response);
-  // void handle_look_at_response(LookAtService::Response::SharedPtr response);
+  bool navigate(glm::vec3 target_point);
+  bool fire_torpedo(int torpedo_number);
+  void look_at(glm::vec3 target_point);
+
+  bool adjust_rotation_motors(Pose current_pose, glm::vec3 target_point);
+  bool adjust_linear_motors(Pose current_pose, glm::vec3 target_point);
+  bool adjust_depth_motors(Pose current_pose, glm::vec3 target_point);
 };

@@ -47,15 +47,7 @@ source install/setup.sh
 
 ## Test
 
-In order to only test `mission_planner` we are gonna asume the rumarino 
-already saw all the objects, actually instead its just gonna get bombarded with 
-"/detector/box_detection" in the start-up time
-
-So each test case will have:
-- objects positions
-- map bounding box
-
-So test runner is a ros2-jazzy node that: 
-- poops out "/detector/box_detection"
-- visual thingy with raylib (wink wink) (if `--visual` flag is passed)
-- fails when hit wall (colision) (think about gate)
+Currently in order to test `mission_planner` we are gonna:
+- use `controller_stonefish` to mock `controller_arduino`,
+- use `??? something in stonefish` to mock `zed2i stuff`
+- use `??? poop a complete map` to mock `omniscience stuff`

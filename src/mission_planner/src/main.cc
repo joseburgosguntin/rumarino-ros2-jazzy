@@ -6,11 +6,6 @@ MissionPlanner::MissionPlanner() : Node("mission_planner") {
       [this](const DetectionsMsg::SharedPtr detections) {
         this->handle_dectections_msg(detections);
       });
-
-  navigate_client = rclcpp_action::create_client<NavigateAction>(
-      this, "navigate_to_waypoint");
-
-  torpedo_client = this->create_client<TorpedoService>("fire_torpedo");
 }
 
 void MissionPlanner::handle_dectections_msg(
@@ -23,7 +18,6 @@ void MissionPlanner::handle_dectections_msg(
     // TODO: figure out how to get object from detection object
     auto object = Object::Cube;
 
-    // log.debugf("found %v at %v", object, pos)
     // always remeber object that are found
     // should the remebered position instead be that pos after we
     // transform it to center of object, cuz it would be a point that
@@ -45,109 +39,105 @@ void MissionPlanner::handle_dectections_msg(
   }
 }
 
-void MissionPlanner::handle_navigate_result(NavigateResult result) {
-  if (result.code == rclcpp_action::ResultCode::SUCCEEDED &&
-      result.result->success) {
-    RCLCPP_INFO(this->get_logger(), "Navigation succeeded!");
+bool MissionPlanner::navigate(glm::vec3 target_point) {
+  RCLCPP_INFO(this->get_logger(), "Goal received: (%f, %f, %f)", target_point.x,
+              target_point.y, target_point.z);
 
-    if (scouting) {
-      // log.panic("reach waypoint aren't expected while scouting")
+  bool original_recorded = false;
+  double original_distance = std::numeric_limits<double>::infinity();
+  glm::vec3 original_point;
+
+  rclcpp::Rate loop_rate(10); // 10 Hz
+
+  // TODO: move this out of main thread
+  while (rclcpp::ok()) {
+    if (!original_recorded) {
+      original_distance = glm::distance(sub_pose.pos, target_point);
+      original_point = sub_pose.pos;
+      original_recorded = true;
     }
 
-    next_step_idx += 1;
-
-    // haven't reach final waypoint (for this object)
-    if (next_step_idx < steps.size()) {
-      send_step(steps[next_step_idx]);
-      // log.debugf("next waypoint: %v", waypoints[next_action_idx])
-      return;
+    auto distance_to_target = glm::distance(sub_pose.pos, target_point);
+    if (distance_to_target < DISTANCE_THRESHOLD + 0.05) {
+      // RCLCPP_INFO(this->get_logger(), "Target reached.");
+      // TODO: In real life, it might a be a good idea to make sure
+      // submarine stays on point (due to buoyancy)
+      this->moving = {.depth = false, .rotation = false, .linear = false};
+      return true;
     }
 
-    auto next_object = tasks[next_task_idx];
+    // TODO: Check for cancel
 
-    auto rememebered_pos = rememebered_objets[static_cast<size_t>(next_object)];
-
-    if (rememebered_pos == glm::vec3{}) {
-      // log.debug("scouting for %v", next_object)
-      scouting = true;
-    } else {
-      // log.debug("remebered %v postion: %v", next_object,
-      // rememebered_pos)
-
-      plan_and_start_task(next_object, rememebered_pos);
+    this->moving = {0};
+    if (adjust_depth_motors(sub_pose, target_point)) {
+      this->moving.depth = true;
+    } else if (!adjust_rotation_motors(sub_pose, target_point)) {
+      this->moving.rotation = true;
+    } else if (!adjust_linear_motors(sub_pose, target_point)) {
+      this->moving.linear = true;
     }
 
-  } else {
-    RCLCPP_INFO(this->get_logger(), "Navigation failed or canceled");
-  }
-}
+    Float64MultiArray thursters_msg;
+    thursters_msg.data.insert(thursters_msg.data.begin(),
+                              std::begin(thruster_values),
+                              std::end(thruster_values));
+    thrusters_pub->publish(thursters_msg);
 
-void MissionPlanner::handle_torpedo_response(
-    TorpedoService::Response::SharedPtr response) {
-  // TODO
-}
-
-void MissionPlanner::send_navigate_goal(glm::vec3 pos) {
-  // Wait until the action server is available
-  if (!navigate_client->wait_for_action_server(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(this->get_logger(), "Action server not available");
-    return;
+    loop_rate.sleep();
   }
 
-  // Create the goal
-  auto goal_msg = NavigateAction::Goal();
-  goal_msg.target_point.x = pos.x;
-  goal_msg.target_point.y = pos.y;
-  goal_msg.target_point.z = pos.z;
-
-  // Configure callbacks
-  auto send_options = rclcpp_action::Client<NavigateAction>::SendGoalOptions();
-  send_options.feedback_callback =
-      [this](auto, NavigateAction::Feedback::ConstSharedPtr feedback) {
-        RCLCPP_INFO(this->get_logger(), "Progress: %f%%",
-                    feedback->distance_to_target);
-      };
-  send_options.result_callback = [this](NavigateResult result) {
-    this->handle_navigate_result(result);
-  };
-
-  // Send the goal asynchronously
-  navigate_client->async_send_goal(goal_msg, send_options);
+  // # In case of an unexpected exit
+  // rospy.logwarn("Action server terminated unexpectedly.")
+  return false;
 }
 
-void MissionPlanner::send_torpedo_request(int which_torpedo) {
-  if (!torpedo_client->wait_for_service(std::chrono::seconds(1))) {
-    RCLCPP_WARN(this->get_logger(), "Service not available");
-    return;
+void MissionPlanner::look_at(glm::vec3 target_point) {
+  // TODO:
+}
+
+bool MissionPlanner::fire_torpedo(int torpedo_number) {
+  assert(torpedo_number >= 1 && torpedo_number <= 2);
+
+  for (auto motor_id : TORPEDO_MOTORS_ID) {
+    thruster_values[motor_id - 1] = TORPEDO_FIRE;
   }
+  Float64MultiArray thursters_msg_1;
+  thursters_msg_1.data.insert(thursters_msg_1.data.begin(),
+                              std::begin(thruster_values),
+                              std::end(thruster_values));
+  thrusters_pub->publish(thursters_msg_1);
 
-  auto request = std::make_shared<TorpedoService::Request>();
-  request->torpedo_number = which_torpedo; // 1 or 2
+  RCLCPP_INFO(this->get_logger(), "Firing torpedo %d", torpedo_number);
 
-  using ServiceResponseFuture = rclcpp::Client<TorpedoService>::SharedFuture;
+  // # Wait for the firing duration
+  // TODO: don't sleep in main thread probably
+  rclcpp::sleep_for(TORPEDO_FIRE_DURATION);
 
-  auto response_received_callback = [this](ServiceResponseFuture future) {
-    auto response = future.get();
-    handle_torpedo_response(response);
-  };
+  for (auto motor_id : TORPEDO_MOTORS_ID) {
+    thruster_values[motor_id - 1] = 0;
+  }
+  Float64MultiArray thursters_msg_2;
+  thursters_msg_2.data.insert(thursters_msg_2.data.begin(),
+                              std::begin(thruster_values),
+                              std::end(thruster_values));
+  thrusters_pub->publish(thursters_msg_2);
 
-  torpedo_client->async_send_request(request, response_received_callback);
-}
+  RCLCPP_INFO(this->get_logger(), "Torpedo %d fired successfully",
+              torpedo_number);
 
-void MissionPlanner::send_look_at_request(glm::vec3 pos) {
-  // TODO
+  return true;
 }
 
 void MissionPlanner::send_step(Step action) {
   if (std::holds_alternative<step::Shoot>(action)) {
     step::Shoot shoot = std::get<step::Shoot>(action);
-    send_torpedo_request(shoot.which_torpedo);
+    MissionPlanner::fire_torpedo(shoot.which_torpedo);
   } else if (std::holds_alternative<step::LookAt>(action)) {
     step::LookAt look_at = std::get<step::LookAt>(action);
-    send_look_at_request(look_at.pos);
+    MissionPlanner::look_at(look_at.pos);
   } else if (std::holds_alternative<step::Navigate>(action)) {
     step::Navigate navigate = std::get<step::Navigate>(action);
-    send_navigate_goal(navigate.pos);
+    MissionPlanner::navigate(navigate.pos);
   }
 }
 
@@ -206,6 +196,107 @@ void MissionPlanner::plan_and_start_task(Object object, glm::vec3 pos) {
   next_task_idx += 1;
   scouting = false;
   send_step(steps[next_step_idx]);
+}
+
+bool MissionPlanner::adjust_depth_motors(Pose current_pose,
+                                         glm::vec3 target_point) {
+  auto dz = target_point.z - current_pose.pos.z;
+  if (abs(dz) < DISTANCE_THRESHOLD) {
+    // # Stop depth movement by setting all depth motors to neutral
+    for (auto motor_id : DEPTH_MOTORS_ID) {
+      auto idx = motor_id - 1;
+      this->thruster_values[idx] = 0;
+    }
+    RCLCPP_INFO(this->get_logger(),
+                "Target depth reached, stopping depth motors");
+    return true;
+  }
+
+  for (auto motor_id : DEPTH_MOTORS_ID) {
+    auto idx = motor_id - 1; // Convert 1-based to 0-based index
+    this->thruster_values[idx] = -glm::sign(dz) * DEPTH_ADJUST;
+  }
+  return false;
+}
+
+float normalize_angle(float angle) {
+  return glm::mod(angle + glm::pi<float>(), 2.0f * glm::pi<float>()) -
+         glm::pi<float>();
+}
+
+bool MissionPlanner::adjust_rotation_motors(Pose current_pose,
+                                            glm::vec3 target_point) {
+
+  auto current_yaw = glm::eulerAngles(current_pose.rot).z;
+  auto dir = target_point - current_pose.pos;
+  auto target_yaw = std::atan2(dir.y, dir.x);
+  auto dangle = normalize_angle(target_yaw - current_yaw);
+  // auto dz = target_point.z - current_pose.pos.z;
+  if (glm::abs(dangle) < DISTANCE_THRESHOLD) {
+    for (auto motor_id : FRONT_MOTORS_ID) {
+      auto idx = motor_id - 1; // # Convert 1-based to 0-based index
+      this->thruster_values[idx] = 0;
+    }
+    for (auto motor_id : BACK_MOTORS_ID) {
+      auto idx = motor_id - 1; // # Convert 1-based to 0-based index
+      this->thruster_values[idx] = 0;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Rotation aligned with target");
+    return true;
+  }
+
+  auto sign = glm::sign(dangle);
+
+  for (auto motor_id : FRONT_MOTORS_ID) {
+    auto idx = motor_id - 1; // # Convert 1-based to 0-based index
+    if (idx == FRONT_MOTORS_ID[0] - 1) {
+      this->thruster_values[idx] = -sign * ROTATION_ADJUST;
+    } else {
+      this->thruster_values[idx] = sign * ROTATION_ADJUST;
+    }
+  }
+
+  for (auto motor_id : BACK_MOTORS_ID) {
+    auto idx = motor_id - 1; // # Convert 1-based to 0-based index
+    if (idx == FRONT_MOTORS_ID[0] - 1) {
+      this->thruster_values[idx] = -sign * ROTATION_ADJUST;
+    } else {
+      this->thruster_values[idx] = sign * ROTATION_ADJUST;
+    }
+  }
+
+  return false;
+}
+
+bool MissionPlanner::adjust_linear_motors(Pose current_pose,
+                                          glm::vec3 target_point) {
+  if (glm::distance(current_pose.pos, target_point) < DISTANCE_THRESHOLD) {
+    for (auto motor_id : FRONT_MOTORS_ID) {
+      auto idx = motor_id - 1;
+      this->thruster_values[idx] = 0;
+    }
+    for (auto motor_id : BACK_MOTORS_ID) {
+      auto idx = motor_id - 1;
+      this->thruster_values[idx] = 0;
+    }
+
+    RCLCPP_INFO(this->get_logger(),
+                "Target reached, stopping forward movement");
+    return true;
+  }
+
+  for (auto motor_id : FRONT_MOTORS_ID) {
+    auto idx = motor_id - 1; // Convert 1-based to 0-based index
+    this->thruster_values[idx] = LINEAR_ADJUST;
+  }
+
+  for (auto motor_id : BACK_MOTORS_ID) {
+    auto idx = motor_id - 1; // Convert 1-based to 0-based index
+    this->thruster_values[idx] = LINEAR_ADJUST;
+  }
+
+  return false;
 }
 
 int main(int argc, char *argv[]) {

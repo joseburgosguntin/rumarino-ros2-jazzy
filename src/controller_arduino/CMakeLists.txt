@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(controller VERSION 0.0.1 LANGUAGES CXX)
+project(controller_arduino VERSION 0.0.1 LANGUAGES CXX)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)

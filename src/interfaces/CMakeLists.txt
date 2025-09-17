@@ -16,10 +16,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Detection.msg"
   "msg/Detections.msg"
   "msg/MovingState.msg"
-  "action/NavigateToWaypoint.action"
-  "srv/FireTorpedo.srv"
-  "srv/SetYoloModel.srv"
-  "srv/SetColorFilter.srv"
   DEPENDENCIES geometry_msgs sensor_msgs
 )
 
