@@ -21,7 +21,7 @@ Controller::Controller() : Node("controller") {
 
   arduino = std::fstream(control_port,
                          std::ios::in | std::ios::out | std::ios::binary);
-  if (arduino.is_open()) {
+  if (!arduino.is_open()) {
     RCLCPP_FATAL(this->get_logger(), "file not found: `%s`",
                  control_port.c_str());
   }
