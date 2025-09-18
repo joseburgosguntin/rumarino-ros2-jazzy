@@ -27,7 +27,7 @@ Controller::Controller() : Node("controller") {
   }
 
   thrusters_sub = this->create_subscription<Float64MultiArray>(
-      "hydrus_thruster", 10,
+      "hydrus/thruster", 10,
       [this](const Float64MultiArray::SharedPtr thrusters) {
         this->handle_thrusters_msg(thrusters);
       });

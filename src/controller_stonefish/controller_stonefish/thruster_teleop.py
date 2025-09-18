@@ -13,7 +13,7 @@ class ThrusterTeleOp(Node):
     def __init__(self):
         super().__init__('thruster_teleop')
         self.publisher_ = self.create_publisher(
-            Float64MultiArray, 'hydrus_thruster', 10)
+            Float64MultiArray, '/hydrus/thrusters', 10)
         timer_period = 0.1  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.thruster_speeds = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -23,6 +23,10 @@ class ThrusterTeleOp(Node):
         self.thrust_increment = 0.1
         self.max_thrust = 1.0
         self.min_thrust = -1.0
+
+        # Horizontal movement settings for corner thrusters
+        self.forward_thrust = 0.0
+        self.rotation_thrust = 0.0
 
         # Start keyboard listener thread
         self.running = True
@@ -35,10 +39,15 @@ class ThrusterTeleOp(Node):
     def print_instructions(self):
         print("\n=== Hydrus Thruster Teleop Control ===")
         print("Controls:")
-        print("  w/W : Move up (increase thrust)")
-        print("  s/S : Move down (decrease thrust)")
-        print("  x/X : Stop all thrusters")
-        print("  q/Q : Quit")
+        print("  w : Move forward (stops rotation)")
+        print("  s : Move backward (stops rotation)")
+        print("  a : Rotate left (stops forward/backward)")
+        print("  d : Rotate right (stops forward/backward)")
+        print("  q : Move up (increase thrust)")
+        print("  e : Move down (decrease thrust)")
+        print("  x : Stop all thrusters")
+        print("  z : Quit")
+        print("Note: Forward/backward and rotation are mutually exclusive")
         print("=====================================\n")
 
     def keyboard_listener(self):
@@ -59,7 +68,43 @@ class ThrusterTeleOp(Node):
         """Process keyboard input"""
         key_lower = key.lower()
 
-        if key_lower == 'q':
+        if key_lower == 'w':
+            # Move forward - thrusters 0 and 2 forward
+            # Reset rotation when moving forward
+            self.rotation_thrust = 0.0
+            self.forward_thrust = min(self.max_thrust,
+                                      self.forward_thrust + self.thrust_increment)
+            self.get_logger().info(
+                f'Moving forward - Thrust: {self.forward_thrust:.1f}')
+
+        elif key_lower == 's':
+            # Move backward - thrusters 0 and 2 backward
+            # Reset rotation when moving backward
+            self.rotation_thrust = 0.0
+            self.forward_thrust = max(self.min_thrust,
+                                      self.forward_thrust - self.thrust_increment)
+            self.get_logger().info(
+                f'Moving backward - Thrust: {self.forward_thrust:.1f}')
+
+        elif key_lower == 'a':
+            # Rotate left
+            # Reset forward movement when rotating
+            self.forward_thrust = 0.0
+            self.rotation_thrust = min(self.max_thrust,
+                                       self.rotation_thrust + self.thrust_increment)
+            self.get_logger().info(
+                f'Rotating left - Thrust: {self.rotation_thrust:.1f}')
+
+        elif key_lower == 'd':
+            # Rotate right
+            # Reset forward movement when rotating
+            self.forward_thrust = 0.0
+            self.rotation_thrust = max(self.min_thrust,
+                                       self.rotation_thrust - self.thrust_increment)
+            self.get_logger().info(
+                f'Rotating right - Thrust: {self.rotation_thrust:.1f}')
+
+        elif key_lower == 'q':
             # Move up - increase thrust
             self.vertical_thrust = min(self.max_thrust,
                                        self.vertical_thrust + self.thrust_increment)
@@ -74,6 +119,8 @@ class ThrusterTeleOp(Node):
         elif key_lower == 'x':
             # Stop all thrusters
             self.vertical_thrust = 0.0
+            self.forward_thrust = 0.0
+            self.rotation_thrust = 0.0
             self.get_logger().info('Stopping all thrusters')
 
         elif key_lower == 'z':
@@ -82,7 +129,29 @@ class ThrusterTeleOp(Node):
             self.running = False
             rclpy.shutdown()
 
-        # Update thruster speeds (last 4 thrusters for vertical movement)
+        # Update thruster speeds
+        # Corner thrusters (0, 1, 2, 3) for horizontal movement
+
+        if self.forward_thrust != 0.0:
+            # Forward/backward movement - thrusters 0 and 2
+            self.thruster_speeds[0] = self.forward_thrust
+            self.thruster_speeds[1] = 0.0
+            self.thruster_speeds[2] = self.forward_thrust
+            self.thruster_speeds[3] = 0.0
+        elif self.rotation_thrust != 0.0:
+            # Rotation movement - differential thrust on corners
+            self.thruster_speeds[0] = self.rotation_thrust
+            self.thruster_speeds[1] = -self.rotation_thrust
+            self.thruster_speeds[2] = -self.rotation_thrust
+            self.thruster_speeds[3] = self.rotation_thrust
+        else:
+            # No horizontal movement
+            self.thruster_speeds[0] = 0.0
+            self.thruster_speeds[1] = 0.0
+            self.thruster_speeds[2] = 0.0
+            self.thruster_speeds[3] = 0.0
+
+        # Vertical thrusters (4, 5, 6, 7) for up/down movement
         for i in range(4, 8):  # Thrusters 4, 5, 6, 7
             self.thruster_speeds[i] = self.vertical_thrust
 
