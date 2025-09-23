@@ -2,14 +2,48 @@
 <scenario>
 	<robot name="$(arg robot_name)" fixed="false" self_collisions="false">
 		<base_link name="Hydrus" type="compound" physics="submerged">
-			<external_part name="HydrusUnibody" type="model" physics="submerged" buoyant="true">
+			<external_part name="Cabin" type="cylinder" physics="submerged" buoyant="true">
+				<dimensions radius="0.0825" height="0.75" />
+				<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
+				<material name="Plastic" />
+				<look name="green" />
+				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 -0.0775" />
+			</external_part>
+
+			<external_part name="Box" type="box" physics="submerged" buoyant="true">
+				<dimensions xyz="0.22 0.22 0.12" />
+				<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
+				<material name="Plastic" />
+				<look name="green" />
+				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 -0.080" />
+			</external_part>
+
+			<external_part name="DVL" type="box" physics="submerged" buoyant="true">
+				<dimensions xyz="0.1 0.1 0.1" />
+				<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
+				<material name="Plastic" />
+				<look name="green" />
+				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.07" />
+			</external_part>
+
+			<external_part name="LowLegsLeft" type="model" physics="submerged" buoyant="true">
 				<physical>
-					<mesh filename="models/hydrus_unibody_centered.obj" scale="1.0" />
+					<mesh filename="models/hydrus_lowlegs.obj" scale="0.01" />
 					<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
 				</physical>
 				<material name="Plastic" />
 				<look name="green" />
-				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0" />
+				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 -0.375 -0.08" />
+			</external_part>
+
+			<external_part name="LowLegsRight" type="model" physics="submerged" buoyant="true">
+				<physical>
+					<mesh filename="models/hydrus_lowlegs.obj" scale="0.01" />
+					<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
+				</physical>
+				<material name="Plastic" />
+				<look name="green" />
+				<compound_transform rpy="0.0 0.0 0.0" xyz="0.228 -0.375 -0.08" />
 			</external_part>
 		</base_link>
 
