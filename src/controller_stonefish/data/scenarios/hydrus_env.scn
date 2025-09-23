@@ -29,6 +29,7 @@
 	</materials>
 
 	<looks>
+		<look name="yellow" rgb="1.0 1.0 0.0" roughness="0.1" metalness="0.0" />
 		<look name="green" rgb="0.0 1.0 0.0" roughness="0.1" metalness="0.1" />
 		<look name="gray" gray="0.5" roughness="0.3" metalness="0.2" />
 		<look name="red" rgb="1.0 0.0 0.0" roughness="0.1" metalness="0.0" />
@@ -38,11 +39,44 @@
 	<static name="Ground" type="plane">
 		<material name="Steel" />
 		<look name="gray" />
-		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 5.0" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 3.0" />
 	</static>
+
+	<!-- Gate -->
+	<static name="GateLeft" type="cylinder">
+		<dimensions radius="0.04" height="2.0" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 3.0" />
+		<material name="Plastic" />
+		<look name="yellow" />
+	</static>
+
+	<static name="GateRight" type="cylinder">
+		<dimensions radius="0.04" height="2.0" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 2.0 3.0" />
+		<material name="Plastic" />
+		<look name="yellow" />
+	</static>
+
+	<static name="GateTop" type="cylinder">
+		<dimensions radius="0.04" height="2.08" />
+		<world_transform rpy="1.5708 0.0 0.0" xyz="0.0 1.0 2.0" />
+		<material name="Plastic" />
+		<look name="yellow" />
+	</static>
+
+	<!-- Marker -->
+	<static name="Marker" type="cylinder">
+		<dimensions radius="0.1" height="4" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="10.0 1.0 3.0" />
+		<material name="Plastic" />
+		<look name="yellow" />
+	</static>
+
+
 	<!-- Single Hydrus AUV instance -->
 	<include file="scenarios/hydrus_auv.scn">
 		<arg name="robot_name" value="HydrusAUV" />
-		<arg name="robot_position" value="0.0 0.0 0.0" />
+		<arg name="robot_rpy" value="0.0 0.0 1.5708" />
+		<arg name="robot_position" value="-3.0 0.5 0.0" />
 	</include>
 </scenario>

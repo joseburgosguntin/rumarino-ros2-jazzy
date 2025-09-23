@@ -254,6 +254,6 @@
 			<ros_publisher topic="/hydrus/camera" />
 		</sensor>
 
-		<world_transform rpy="0.0 0.0 0.0" xyz="$(arg robot_position)" />
+		<world_transform rpy="$(arg robot_rpy)" xyz="$(arg robot_position)" />
 	</robot>
 </scenario>
