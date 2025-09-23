@@ -1,11 +1,13 @@
 #include "interfaces/msg/detections.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 using namespace std::chrono_literals;
 using DetectionsMsg = interfaces::msg::Detections;
+using OdometryMsg = nav_msgs::msg::Odometry;
 using Float64MultiArray = std_msgs::msg::Float64MultiArray;
 
 enum class Object {
@@ -88,6 +90,7 @@ public:
   MissionPlanner();
 
   rclcpp::Subscription<DetectionsMsg>::SharedPtr detection_sub;
+  rclcpp::Subscription<OdometryMsg>::SharedPtr odometry_sub;
   rclcpp::Publisher<Float64MultiArray>::SharedPtr thrusters_pub;
 
 private:
@@ -108,6 +111,7 @@ private:
   Pose sub_pose;
 
   void handle_dectections_msg(const DetectionsMsg::SharedPtr detections);
+  void handle_odometry_msg(const OdometryMsg::SharedPtr imu);
 
   void plan_and_start_task(Object object, glm::vec3 pos);
 

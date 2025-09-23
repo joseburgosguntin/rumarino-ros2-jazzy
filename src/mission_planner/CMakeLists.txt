@@ -20,6 +20,7 @@ find_package(interfaces REQUIRED)
 #   "action/Navigate.action"
 #   DEPENDENCIES geometry_msgs std_msgs
 # )
+find_package(nav_msgs REQUIRED)
 
 # Include headers
 include_directories(include)
@@ -31,6 +32,7 @@ ament_target_dependencies(mission_planner_node
   std_msgs 
   rclcpp_action
   interfaces
+  nav_msgs
 )
 
 # Install the executable

@@ -6,6 +6,10 @@ MissionPlanner::MissionPlanner() : Node("mission_planner") {
       [this](const DetectionsMsg::SharedPtr detections) {
         this->handle_dectections_msg(detections);
       });
+  odometry_sub = this->create_subscription<OdometryMsg>(
+      "/hydrus/odometry", 10, [this](const OdometryMsg::SharedPtr odometry) {
+        this->handle_odometry_msg(odometry);
+      });
 }
 
 void MissionPlanner::handle_dectections_msg(
@@ -37,6 +41,14 @@ void MissionPlanner::handle_dectections_msg(
 
     plan_and_start_task(next_object, pos);
   }
+}
+
+void MissionPlanner::handle_odometry_msg(const OdometryMsg::SharedPtr odometry) {
+  auto p = odometry->pose.pose.position;
+  auto o = odometry->pose.pose.orientation;
+  sub_pose = {.pos = {p.x, p.y, p.z},
+              .rot = {static_cast<float>(o.x), static_cast<float>(o.y),
+                      static_cast<float>(o.z), static_cast<float>(o.w)}};
 }
 
 bool MissionPlanner::navigate(glm::vec3 target_point) {
