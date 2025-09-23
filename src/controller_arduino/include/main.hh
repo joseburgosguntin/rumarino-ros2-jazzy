@@ -1,10 +1,6 @@
 #include "std_msgs/msg/float64_multi_array.hpp"
-#include <cassert>
 #include <fstream>
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
 
 using namespace std::chrono_literals;
 using Float64MultiArray = std_msgs::msg::Float64MultiArray;
