@@ -1,4 +1,5 @@
-#include "interfaces/msg/detections.hpp"
+#include "interfaces/msg/map.hpp"
+#include "vision_msgs/msg/bounding_box3_d.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include <glm/glm.hpp>
@@ -6,15 +7,17 @@
 #include <rclcpp/rclcpp.hpp>
 
 using namespace std::chrono_literals;
-using DetectionsMsg = interfaces::msg::Detections;
+using BoundingBox3D = vision_msgs::msg::BoundingBox3D;
+using MapMsg = interfaces::msg::Map;
 using OdometryMsg = nav_msgs::msg::Odometry;
 using Float64MultiArray = std_msgs::msg::Float64MultiArray;
 
-enum class Object {
-  Cube,
-  Rectangle,
-  Gate,
-  Shark,
+// the object's "class"
+enum class ObjectCls {
+  Cube = 0,
+  Rectangle = 1,
+  Gate = 2,
+  Shark = 3,
 };
 const int OBJECT_COUNT = 3;
 
@@ -23,11 +26,7 @@ const float OVERSHOOT = 4;      // how much to overshoot crossing a gate
 const float FAR_ENOUGH = 10;    // for submarine not hit some other bounding box
 const glm::mat2 CLOCKWISE_90_DEG{0, 1, -1, 0};
 const glm::mat2 COUNTER_CLOCKWISE_90_DEG{0, -1, 1, 0};
-const glm::vec3 OBJECT_DIMS[OBJECT_COUNT] = {
-    {10, 10, 10}, // Cube
-    {10, 20, 10}, // Rectangle
-    {},           // Gate
-};
+
 const float CLOSE_ENOUGH_TO_TORPEDO =
     10; // for submarine not hit some other bounding box
 
@@ -89,18 +88,15 @@ class MissionPlanner : public rclcpp::Node {
 public:
   MissionPlanner();
 
-  rclcpp::Subscription<DetectionsMsg>::SharedPtr detection_sub;
+  rclcpp::Subscription<MapMsg>::SharedPtr map_sub;
   rclcpp::Subscription<OdometryMsg>::SharedPtr odometry_sub;
   rclcpp::Publisher<Float64MultiArray>::SharedPtr thrusters_pub;
 
 private:
-  glm::vec3 sub_pos = {0, 0, 0};
   bool scouting = true;
-  // switch to some sort of object to volume-ish thingy
-  glm::vec3 rememebered_objets[OBJECT_COUNT] = {};
 
   // for now an array to represent sequencial tasks
-  Object tasks[2] = {Object::Gate, Object::Cube};
+  ObjectCls tasks[2] = {ObjectCls::Gate, ObjectCls::Cube};
   int next_task_idx = 0;
 
   std::vector<Step> steps;
@@ -109,11 +105,12 @@ private:
   float thruster_values[TOTAL_THRUSTERS];
   Moving moving;
   Pose sub_pose;
+  MapMsg map_cache;
 
-  void handle_dectections_msg(const DetectionsMsg::SharedPtr detections);
+  void handle_map_msg(const MapMsg::SharedPtr map);
   void handle_odometry_msg(const OdometryMsg::SharedPtr imu);
 
-  void plan_and_start_task(Object object, glm::vec3 pos);
+  void plan_and_start_task(ObjectCls object, BoundingBox3D pos);
 
   // figure out how to make this into `start_next_step` without doing weird
   // recursion

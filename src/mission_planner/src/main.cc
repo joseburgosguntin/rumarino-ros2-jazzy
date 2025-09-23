@@ -1,11 +1,9 @@
 #include <main.hh>
 
 MissionPlanner::MissionPlanner() : Node("mission_planner") {
-  detection_sub = this->create_subscription<DetectionsMsg>(
-      "/detector/box_detection", 10,
-      [this](const DetectionsMsg::SharedPtr detections) {
-        this->handle_dectections_msg(detections);
-      });
+  map_sub = this->create_subscription<MapMsg>(
+      "/hydrus/map", 10,
+      [this](const MapMsg::SharedPtr map) { this->handle_map_msg(map); });
   odometry_sub = this->create_subscription<OdometryMsg>(
       "/hydrus/odometry", 10, [this](const OdometryMsg::SharedPtr odometry) {
         this->handle_odometry_msg(odometry);
@@ -14,34 +12,20 @@ MissionPlanner::MissionPlanner() : Node("mission_planner") {
       this->create_publisher<Float64MultiArray>("/hydrus/thrusters", 10);
 }
 
-void MissionPlanner::handle_dectections_msg(
-    const DetectionsMsg::SharedPtr detections) {
-  RCLCPP_INFO(this->get_logger(), "Received: '%s'",
-              detections->detector_name.c_str());
-  for (auto detection : detections->detections) {
-    auto pos =
-        glm::vec3(detection.point.x, detection.point.y, detection.point.z);
-    // TODO: figure out how to get object from detection object
-    auto object = Object::Cube;
-
-    // always remeber object that are found
-    // should the remebered position instead be that pos after we
-    // transform it to center of object, cuz it would be a point that
-    // keeps moving around
-    rememebered_objets[static_cast<size_t>(object)] = pos;
-
-    if (!scouting) {
-      // log.warnf("ignoring %v: not scouting", object)
-      return;
+void MissionPlanner::handle_map_msg(const MapMsg::SharedPtr map) {
+  RCLCPP_ERROR(this->get_logger(), "GOT MAP MSG");
+  // remeber the last map msg
+  map_cache = *map;
+  if (!scouting) {
+    // ignore new_objects while in a task
+    return;
+  }
+  for (auto i : map->new_object_indexes) {
+    auto new_object = map_cache.objects[i];
+    auto next_object_cls = tasks[next_task_idx];
+    if (static_cast<int>(next_object_cls) == new_object.cls) {
+      plan_and_start_task(next_object_cls, new_object.bbox);
     }
-
-    auto next_object = tasks[next_task_idx];
-    if (next_object != object) {
-      // log.warnf("ignoring %v: not next task %v", object, next_object)
-      return;
-    }
-
-    plan_and_start_task(next_object, pos);
   }
 }
 
@@ -155,54 +139,99 @@ void MissionPlanner::send_step(Step action) {
   }
 }
 
-void MissionPlanner::plan_and_start_task(Object object, glm::vec3 pos) {
+// how much planning should there be
+// because the bbox we get is only the current approximation
+// but responding to every single ajustment in the bbox would result in
+// the submarine stopping and adjusting its rotation and depth
+// also programming the feedback version one is particularly easy
+//
+// currently I think the best strategy might be to still have the concept of
+// steps but have the plan function simply be re ran each time we want to adjust
+// to feedback that would mean we would need to store some initial state of when
+// each task has its steps originally planned
+//
+// its still not clear when a replan is appropiate
+//
+void MissionPlanner::plan_and_start_task(ObjectCls object, BoundingBox3D bbox) {
   steps.clear();
   next_step_idx = 0;
 
+  auto pos = glm::vec3(bbox.center.position.x, bbox.center.position.y,
+                       bbox.center.position.z);
+  auto size = glm::vec3(bbox.size.x, bbox.size.y, bbox.size.z);
+  auto rot = glm::quat(bbox.center.orientation.x, bbox.center.orientation.y,
+                       bbox.center.orientation.z, bbox.center.orientation.w);
+
+  auto pos2d = glm::vec2(pos);
+  auto size2d = glm::vec2(size);
+  auto sub2d = glm::vec2(sub_pose.pos);
+  auto sub_rot = sub_pose.rot;
+
   switch (object) {
-  case Object::Cube:
-  case Object::Rectangle: {
+  case ObjectCls::Cube:
+  case ObjectCls::Rectangle: {
     // Go around
-    auto dims = OBJECT_DIMS[static_cast<size_t>(object)];
-    // since we don't know which face we are looking at
-    auto longest_side = glm::max(dims.x, dims.y);
 
-    auto direction_2d = glm::normalize(glm::vec2{pos} - glm::vec2{sub_pos});
-    auto before_2d = glm::vec2{pos} - direction_2d * FAR_ENOUGH;
-    auto before = glm::vec3{direction_2d, pos.z};
+    // corners of a square centered in 0, with area 1
+    glm::vec2 square_corners[] = {
+        {+0.5, +0.5},
+        {+0.5, -0.5},
+        {-0.5, -0.5},
+        {-0.5, +0.5},
+    };
 
-    auto direction = glm::vec3{direction_2d, 0};
+    // absolute distance from any corner of the object
+    const float DISTANCE_TO_CORNER = 0.10; // 0.10 m == 10cm
+    // a big number so that any corner is always closer
+    const float HUGE_NUMBER = 10000000;
 
-    auto center = pos + direction * (longest_side / 2);
-    auto behind = center + direction * (longest_side / 2 + FAR_ENOUGH);
-    auto right_2d = glm::vec2{center} + direction_2d * CLOCKWISE_90_DEG *
-                                            (longest_side / 2 + FAR_ENOUGH);
-    auto right = glm::vec3{right_2d, pos.z};
-    auto left_2d = glm::vec2{center} + direction_2d * COUNTER_CLOCKWISE_90_DEG *
-                                           (longest_side / 2 + FAR_ENOUGH);
-    auto left = glm::vec3{left_2d, pos.z};
+    glm::vec3 corner_pluss[4];
+    glm::vec2 starting_corner = glm::vec2{HUGE_NUMBER};
+    int starting_i = -1;
+    int i = 0;
+    for (auto square_corner : square_corners) {
+      auto rel_corner = glm::vec2(glm::vec3(square_corner * size2d, 0) * rot);
+      auto corner_plus =
+          pos2d + rel_corner + glm::normalize(rel_corner) * DISTANCE_TO_CORNER;
+      corner_pluss[i] = glm::vec3(corner_plus, pos.z);
 
-    steps.insert(steps.end(), {before, right, behind, left, before});
+      if (glm::length(corner_plus - sub2d) < glm::length(starting_corner)) {
+        starting_i = i;
+        starting_corner = corner_plus;
+      }
+      i += 1;
+    }
+
+    steps.insert(steps.end(), {
+                                  corner_pluss[starting_i + 0 % 4],
+                                  corner_pluss[starting_i + 1 % 4],
+                                  corner_pluss[starting_i + 2 % 4],
+                                  corner_pluss[starting_i + 3 % 4],
+                                  corner_pluss[starting_i + 0 % 4],
+                                  sub_pose.pos,
+                              });
     break;
   }
-  case Object::Gate: {
-    // Pass in and overshoot a little
-    auto direction_2d = glm::normalize(glm::vec2{pos} - glm::vec2{sub_pos});
-    auto before_2d = glm::vec2{pos} - direction_2d * FAR_ENOUGH;
-    auto before = glm::vec3{direction_2d, pos.z};
-
-    auto overshoot_2d = glm::vec2{pos} + direction_2d * OVERSHOOT;
-    auto overshoot = glm::vec3{overshoot_2d, pos.z};
-
-    steps.insert(steps.end(), {before, overshoot});
+  case ObjectCls::Gate: {
+    //   // Pass in and overshoot a little
+    //   auto direction_2d =
+    //       glm::normalize(glm::vec2{pos} - glm::vec2{sub_pose.pos});
+    //   auto before_2d = glm::vec2{pos} - direction_2d * FAR_ENOUGH;
+    //   auto before = glm::vec3{direction_2d, pos.z};
+    //
+    //   auto overshoot_2d = glm::vec2{pos} + direction_2d * OVERSHOOT;
+    //   auto overshoot = glm::vec3{overshoot_2d, pos.z};
+    //
+    //   steps.insert(steps.end(), {before, overshoot});
     break;
   }
-  case Object::Shark: {
-    auto direction_2d = glm::normalize(glm::vec2{pos} - glm::vec2{sub_pos});
-    auto before_2d = glm::vec2{pos} - direction_2d * CLOSE_ENOUGH_TO_TORPEDO;
-    auto before = glm::vec3{direction_2d, pos.z};
-
-    steps.insert(steps.end(), {before, step::LookAt{pos}, step::Shoot{}});
+  case ObjectCls::Shark: {
+    //   auto direction_2d =
+    //       glm::normalize(glm::vec2{pos} - glm::vec2{sub_pose.pos});
+    //   auto before_2d = glm::vec2{pos} - direction_2d *
+    //   CLOSE_ENOUGH_TO_TORPEDO; auto before = glm::vec3{direction_2d, pos.z};
+    //
+    //   steps.insert(steps.end(), {before, step::LookAt{pos}, step::Shoot{}});
     break;
   }
   }

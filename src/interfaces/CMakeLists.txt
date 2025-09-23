@@ -8,15 +8,14 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
+find_package(vision_msgs REQUIRED)
 
 # Generate messages and actions
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Detection.msg"
-  "msg/Detections.msg"
   "msg/MovingState.msg"
-  DEPENDENCIES geometry_msgs sensor_msgs
+  "msg/Map.msg"
+  "msg/MapObject.msg"
+  DEPENDENCIES vision_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

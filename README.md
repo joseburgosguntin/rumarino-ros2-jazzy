@@ -15,6 +15,7 @@
 
 ```sh
 sudo dnf install ros-jazzy-desktop
+sudo dnf install ros-jazzy-vision-msgs
 
 sudo dnf install freetype-devel
 sudo dnf install SDL2-devel
@@ -45,9 +46,14 @@ colcon build --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 source install/setup.sh
 ```
 
+## Topics
+/hydrus/thrustors std_msgs/Float64MultiArray
+/hydrus/odometry  nav_msgs/Odometry
+/hydrus/map       interfaces/Map
+
 ## Test
 
 Currently in order to test `mission_planner` we are gonna:
-- use `controller_stonefish` to mock `controller_arduino`,
-- use `??? something in stonefish` to mock `zed2i stuff`
-- use `??? poop a complete map` to mock `omniscience stuff`
+- `controller_stonefish` for /hydrus/thrustors
+- `controller_stonefish` for /hydrus/odometry
+- `just manualy publish a single Map msg` /hydrus/map Map
