@@ -20,8 +20,9 @@ setup(
     maintainer_email='101651981+joseburgosguntin@users.noreply.github.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
-        'console_scripts': [],
+        'console_scripts': [
+            'oneshot_map_node = bringup.scripts.oneshot_map:main',
+        ],
     },
 )

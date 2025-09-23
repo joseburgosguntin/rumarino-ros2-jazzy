@@ -28,5 +28,11 @@ def generate_launch_description():
                 'rendering_quality': 'high'
             }.items()
         ),
+        # one-off publisher
+        Node(
+            package='bringup',  # where OneShotPublisher lives
+            executable='oneshot_map_node',
+            output='screen'
+        )
     ])
 
