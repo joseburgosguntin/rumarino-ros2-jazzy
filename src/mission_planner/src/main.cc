@@ -10,6 +10,8 @@ MissionPlanner::MissionPlanner() : Node("mission_planner") {
       "/hydrus/odometry", 10, [this](const OdometryMsg::SharedPtr odometry) {
         this->handle_odometry_msg(odometry);
       });
+  thrusters_pub =
+      this->create_publisher<Float64MultiArray>("/hydrus/thrusters", 10);
 }
 
 void MissionPlanner::handle_dectections_msg(
