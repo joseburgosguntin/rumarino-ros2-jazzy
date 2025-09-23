@@ -9,17 +9,7 @@ endif()
 # Find ROS 2 packages
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclcpp_action REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
 find_package(interfaces REQUIRED)
-
-# find_package(rosidl_default_generators REQUIRED)
-
-# rosidl_generate_interfaces(${PROJECT_NAME}
-#   "action/Navigate.action"
-#   DEPENDENCIES geometry_msgs std_msgs
-# )
 find_package(nav_msgs REQUIRED)
 
 # Include headers
@@ -29,8 +19,6 @@ include_directories(include)
 add_executable(mission_planner_node src/main.cc)
 ament_target_dependencies(mission_planner_node 
   rclcpp 
-  std_msgs 
-  rclcpp_action
   interfaces
   nav_msgs
 )
