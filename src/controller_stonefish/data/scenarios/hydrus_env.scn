@@ -45,21 +45,21 @@
 	<!-- Gate -->
 	<static name="GateLeft" type="cylinder">
 		<dimensions radius="0.04" height="2.0" />
-		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 3.0" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 2.0" />
 		<material name="Plastic" />
 		<look name="yellow" />
 	</static>
 
 	<static name="GateRight" type="cylinder">
 		<dimensions radius="0.04" height="2.0" />
-		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 2.0 3.0" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 2.0 2.0" />
 		<material name="Plastic" />
 		<look name="yellow" />
 	</static>
 
 	<static name="GateTop" type="cylinder">
 		<dimensions radius="0.04" height="2.08" />
-		<world_transform rpy="1.5708 0.0 0.0" xyz="0.0 1.0 2.0" />
+		<world_transform rpy="1.5708 0.0 0.0" xyz="0.0 1.0 1.0" />
 		<material name="Plastic" />
 		<look name="yellow" />
 	</static>
@@ -67,7 +67,7 @@
 	<!-- Marker -->
 	<static name="Marker" type="cylinder">
 		<dimensions radius="0.1" height="4" />
-		<world_transform rpy="0.0 0.0 0.0" xyz="10.0 1.0 3.0" />
+		<world_transform rpy="0.0 0.0 0.0" xyz="10.0 1.0 2.0" />
 		<material name="Plastic" />
 		<look name="yellow" />
 	</static>
