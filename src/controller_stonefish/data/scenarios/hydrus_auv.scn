@@ -3,25 +3,25 @@
 	<robot name="$(arg robot_name)" fixed="false" self_collisions="false">
 		<base_link name="Hydrus" type="compound" physics="submerged">
 			<external_part name="Cabin" type="cylinder" physics="submerged" buoyant="true">
-				<dimensions radius="0.0825" height="0.75" />
+				<dimensions radius="0.0825" height="0.75" thickness="0.005" />
 				<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
-				<material name="Plastic" />
-				<look name="green" />
+				<material name="acrylic" />
+				<look name="clear" />
 				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 -0.0775" />
 			</external_part>
 
 			<external_part name="Box" type="box" physics="submerged" buoyant="true">
-				<dimensions xyz="0.22 0.22 0.12" />
+				<dimensions xyz="0.22 0.22 0.12" thickness="0.003" />
 				<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
-				<material name="Plastic" />
-				<look name="green" />
+				<material name="aluminium" />
+				<look name="black" />
 				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 -0.080" />
 			</external_part>
 
 			<external_part name="DVL" type="box" physics="submerged" buoyant="true">
 				<dimensions xyz="0.1 0.1 0.1" />
 				<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
-				<material name="Plastic" />
+				<material name="abs" />
 				<look name="green" />
 				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.07" />
 			</external_part>
@@ -31,8 +31,8 @@
 					<mesh filename="models/hydrus_lowlegs.obj" scale="0.01" />
 					<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
 				</physical>
-				<material name="Plastic" />
-				<look name="green" />
+				<material name="hdpe" />
+				<look name="black" />
 				<compound_transform rpy="0.0 0.0 0.0" xyz="0.0 -0.375 -0.08" />
 			</external_part>
 
@@ -41,8 +41,8 @@
 					<mesh filename="models/hydrus_lowlegs.obj" scale="0.01" />
 					<origin rpy="-1.5708 0.0 0.0" xyz="0.0 0.0 0.0" />
 				</physical>
-				<material name="Plastic" />
-				<look name="green" />
+				<material name="hdpe" />
+				<look name="black" />
 				<compound_transform rpy="0.0 0.0 0.0" xyz="0.228 -0.375 -0.08" />
 			</external_part>
 		</base_link>
@@ -57,7 +57,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -78,7 +78,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -99,7 +99,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -120,7 +120,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -142,7 +142,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -163,7 +163,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -184,7 +184,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -205,7 +205,7 @@
 				normalized_setpoint="true" />
 			<propeller diameter="0.18" right="true">
 				<mesh filename="models/propeller.obj" scale="0.75" />
-				<material name="Plastic" />
+				<material name="pvc" />
 				<look name="propeller" />
 			</propeller>
 			<rotor_dynamics type="mechanical_pi">
@@ -219,11 +219,11 @@
 			</thrust_model>
 		</actuator>
 
-    <sensor name="Odometry" type="odometry" rate="30.0">
-      <link name="Hydrus" />
-      <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
-      <ros_publisher topic="/hydrus/odometry" />
-    </sensor>
+		<sensor name="Odometry" type="odometry" rate="30.0">
+			<link name="Hydrus" />
+			<origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+			<ros_publisher topic="/hydrus/odometry" />
+		</sensor>
 
 		<sensor name="Camera" rate="10.0" type="camera">
 			<specs resolution_x="800" resolution_y="600" horizontal_fov="60.0" />

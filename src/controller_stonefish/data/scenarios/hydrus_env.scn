@@ -17,27 +17,43 @@
 	</environment>
 
 	<materials>
-		<material name="Aluminium" density="2700.0" restitution="0.8" />
-		<material name="Steel" density="7810.0" restitution="0.9" />
-		<material name="Plastic" density="1500.0" restitution="0.4" />
-		<material name="Dummy" density="1000.0" restitution="0.5" />
+		<!-- used for cylinder -->
+		<material name="acrylic" density="1200.0" restitution="0.3" />
+		<!-- used for low legs -->
+		<material name="hdpe" density="950.0" restitution="0.4" />
+		<!-- used for dvl -->
+		<material name="abs" density="1040.0" restitution="0.4" />
+		<!-- used for box -->
+		<material name="aluminium" density="2700.0" restitution="0.8" />
+
+		<material name="steel" density="7810.0" restitution="0.9" />
+		<material name="pvc" density="1500.0" restitution="0.4" />
 		<friction_table>
-			<friction material1="Aluminium" material2="Aluminium" static="0.7" dynamic="0.5" />
-			<friction material1="Steel" material2="Steel" static="0.4" dynamic="0.2" />
-			<friction material1="Aluminium" material2="Steel" static="0.6" dynamic="0.4" />
+			<friction material1="aluminium" material2="aluminium" static="0.7" dynamic="0.5" />
+			<friction material1="steel" material2="steel" static="0.4" dynamic="0.2" />
+			<friction material1="aluminium" material2="steel" static="0.6" dynamic="0.4" />
+			<friction material1="pvc" material2="pvc" static="0.4" dynamic="0.2" />
+			<friction material1="pvc" material2="steel" static="0.5" dynamic="0.3" />
+			<friction material1="pvc" material2="aluminium" static="0.5" dynamic="0.3" />
 		</friction_table>
 	</materials>
 
 	<looks>
+		<!-- used in mission objects-->
 		<look name="yellow" rgb="1.0 1.0 0.0" roughness="0.1" metalness="0.0" />
-		<look name="green" rgb="0.0 1.0 0.0" roughness="0.1" metalness="0.1" />
-		<look name="gray" gray="0.5" roughness="0.3" metalness="0.2" />
-		<look name="red" rgb="1.0 0.0 0.0" roughness="0.1" metalness="0.0" />
+		<!-- used for cylinder -->
+		<look name="clear" rgb="0.9 0.9 0.9" roughness="0.1" metalness="0.0" />
+		<!-- used for box and lowlegs-->
+		<look name="black" rgb="0.0 0.0 0.0" roughness="0.1" metalness="0.0" />
+		<!-- used for dvl -->
+		<look name="green" rgb="0.0 0.2 0.0" roughness="0.1" metalness="0.1" />
+
+		<look name="gray" rgb="0.5 0.5 0.5" roughness="0.3" metalness="0.0" />
 		<look name="propeller" gray="1.0" roughness="0.3" />
 	</looks>
 
 	<static name="Ground" type="plane">
-		<material name="Steel" />
+		<material name="steel" />
 		<look name="gray" />
 		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 3.0" />
 	</static>
@@ -46,21 +62,21 @@
 	<static name="GateLeft" type="cylinder">
 		<dimensions radius="0.04" height="2.0" />
 		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 2.0" />
-		<material name="Plastic" />
+		<material name="pvc" />
 		<look name="yellow" />
 	</static>
 
 	<static name="GateRight" type="cylinder">
 		<dimensions radius="0.04" height="2.0" />
 		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 2.0 2.0" />
-		<material name="Plastic" />
+		<material name="pvc" />
 		<look name="yellow" />
 	</static>
 
 	<static name="GateTop" type="cylinder">
 		<dimensions radius="0.04" height="2.08" />
 		<world_transform rpy="1.5708 0.0 0.0" xyz="0.0 1.0 1.0" />
-		<material name="Plastic" />
+		<material name="pvc" />
 		<look name="yellow" />
 	</static>
 
@@ -68,7 +84,7 @@
 	<static name="Marker" type="cylinder">
 		<dimensions radius="0.1" height="4" />
 		<world_transform rpy="0.0 0.0 0.0" xyz="10.0 1.0 2.0" />
-		<material name="Plastic" />
+		<material name="pvc" />
 		<look name="yellow" />
 	</static>
 
