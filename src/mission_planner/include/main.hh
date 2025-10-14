@@ -105,6 +105,7 @@ private:
   float thruster_values[TOTAL_THRUSTERS];
   Moving moving;
   Pose sub_pose;
+  int map_objects_count;
   MapMsg map_cache;
 
   void handle_map_msg(const MapMsg::SharedPtr map);

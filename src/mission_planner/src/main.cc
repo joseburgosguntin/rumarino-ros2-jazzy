@@ -20,13 +20,15 @@ void MissionPlanner::handle_map_msg(const MapMsg::SharedPtr map) {
     // ignore new_objects while in a task
     return;
   }
-  for (auto i : map->new_object_indexes) {
+  int new_objects_count = map->objects.size() - map_objects_count;
+  for (int i = map_objects_count; i < new_objects_count; i += 1) {
     auto new_object = map_cache.objects[i];
     auto next_object_cls = tasks[next_task_idx];
     if (static_cast<int>(next_object_cls) == new_object.cls) {
       plan_and_start_task(next_object_cls, new_object.bbox);
     }
   }
+  map_objects_count += new_objects_count;
 }
 
 void MissionPlanner::handle_odometry_msg(const OdometryMsg::SharedPtr odometry) {
