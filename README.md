@@ -48,13 +48,13 @@ source install/setup.sh
 ```
 
 ## Topics
-/hydrus/thrustors std_msgs/Float64MultiArray
+/hydrus/thrusters std_msgs/Float64MultiArray
 /hydrus/odometry  nav_msgs/Odometry
 /hydrus/map       interfaces/Map
 
 ## Test
 
 Currently in order to test `mission_planner` we are gonna:
-- `controller_stonefish` for /hydrus/thrustors
+- `controller_stonefish` for /hydrus/thrusters
 - `controller_stonefish` for /hydrus/odometry
 - `just manualy publish a single Map msg` /hydrus/map Map
