@@ -1,3 +1,4 @@
+#include <glm/detail/qualifier.hpp>
 #include <main.hh>
 
 MissionPlanner::MissionPlanner() : Node("mission_planner") {
@@ -11,10 +12,23 @@ MissionPlanner::MissionPlanner() : Node("mission_planner") {
       });
   thrusters_pub =
       this->create_publisher<Float64MultiArray>("/hydrus/thrusters", 10);
+
+
+
+  directions << +0.382, +0.382, -0.382, -0.382, +0.000, +0.000, +0.000, +0.000, // dx
+                -0.923, +0.923, -0.923, +0.000, +0.000, +0.000, +0.000, +0.000, // dy
+                +0.000, +0.000, +0.000, +0.000, +0.999, +0.999, +0.999, +0.999; // dz
+                                                                                //
+  positions << +0.198, +0.198, -0.198, -0.198, +0.211, +0.211, -0.211, -0.211, // x
+               +0.407, -0.408, +0.407, -0.408, +0.169, -0.169, +0.169, -0.169, // y
+               +0.000, +0.000, +0.000, +0.000, +0.000, +0.000, +0.000, +0.000; // z
+
+
+  RCLCPP_INFO_STREAM(this->get_logger(), "values_norm");
+  RCLCPP_INFO_STREAM(this->get_logger(), values_norm);
 }
 
 void MissionPlanner::handle_map_msg(const MapMsg::SharedPtr map) {
-  RCLCPP_ERROR(this->get_logger(), "GOT MAP MSG");
   // remeber the last map msg
   map_cache = *map;
   if (!scouting) {
@@ -24,6 +38,10 @@ void MissionPlanner::handle_map_msg(const MapMsg::SharedPtr map) {
   int new_objects_count = map->objects.size() - map_objects_count;
   for (int i = map_objects_count; i < new_objects_count; i += 1) {
     auto new_object = map_cache.objects[i];
+    auto pos = new_object.bbox.center.position;
+    RCLCPP_INFO(this->get_logger(), "MapObject { %d, {%f, %f, %f} }",
+                new_object.cls, pos.x, pos.y, pos.z);
+    RCLCPP_INFO(this->get_logger(), "%d", next_task_idx);
     auto next_object_cls = tasks[next_task_idx];
     if (static_cast<int>(next_object_cls) == new_object.cls) {
       plan_and_start_task(next_object_cls, new_object.bbox);
@@ -32,64 +50,111 @@ void MissionPlanner::handle_map_msg(const MapMsg::SharedPtr map) {
   map_objects_count += new_objects_count;
 }
 
-void MissionPlanner::handle_odometry_msg(const OdometryMsg::SharedPtr odometry) {
+void MissionPlanner::handle_odometry_msg(
+    const OdometryMsg::SharedPtr odometry) {
   auto p = odometry->pose.pose.position;
   auto o = odometry->pose.pose.orientation;
   sub_pose = {.pos = {p.x, p.y, p.z},
-              .rot = {static_cast<float>(o.x), static_cast<float>(o.y),
-                      static_cast<float>(o.z), static_cast<float>(o.w)}};
+              .rot = {static_cast<float>(o.w), static_cast<float>(o.x),
+                      static_cast<float>(o.y), static_cast<float>(o.z)}};
+
+  glm::vec3 euler = glm::eulerAngles(sub_pose.rot);
+  float yaw = euler.y;
+
+  RCLCPP_INFO_STREAM(this->get_logger(), "Yaw: z");
+  RCLCPP_INFO_STREAM(this->get_logger(), yaw);
 }
 
 bool MissionPlanner::navigate(glm::vec3 target_point) {
   RCLCPP_INFO(this->get_logger(), "Goal received: (%f, %f, %f)", target_point.x,
               target_point.y, target_point.z);
 
-  bool original_recorded = false;
-  double original_distance = std::numeric_limits<double>::infinity();
-  glm::vec3 original_point;
+  std::thread t([this]{
+    bool original_recorded = false;
+    double original_distance = std::numeric_limits<double>::infinity();
+    glm::vec3 original_point;
 
-  rclcpp::Rate loop_rate(10); // 10 Hz
+    rclcpp::Rate loop_rate(10); // 10 Hz
+    while (rclcpp::ok()) {
+      // if (!original_recorded) {
+      //   original_distance = glm::distance(sub_pose.pos, target_point);
+      //   original_point = sub_pose.pos;
+      //   original_recorded = true;
+      // }
+      //
+      // auto distance_to_target = glm::distance(sub_pose.pos, target_point);
+      // if (distance_to_target < DISTANCE_THRESHOLD + 0.05) {
+      //   // RCLCPP_INFO(this->get_logger(), "Target reached.");
+      //   // TODO: In real life, it might a be a good idea to make sure
+      //   // submarine stays on point (due to buoyancy)
+      //   this->moving = {.depth = false, .rotation = false, .linear = false};
+      //   return true;
+      // }
+      //
+      // // TODO: Check for cancel
+      //
+      // this->moving = {0};
+      // if (adjust_depth_motors(sub_pose, target_point)) {
+      //   this->moving.depth = true;
+      // } else if (!adjust_rotation_motors(sub_pose, target_point)) {
+      //   this->moving.rotation = true;
+      // } else if (!adjust_linear_motors(sub_pose, target_point)) {
+      //   this->moving.linear = true;
+      // }
+      //
+      // Float64MultiArray thursters_msg;
+      // thursters_msg.data.insert(thursters_msg.data.begin(),
+      //                           std::begin(thruster_values),
+      //                           std::end(thruster_values));
+      // thrusters_pub->publish(thursters_msg);
 
-  // TODO: move this out of main thread
-  while (rclcpp::ok()) {
-    if (!original_recorded) {
-      original_distance = glm::distance(sub_pose.pos, target_point);
-      original_point = sub_pose.pos;
-      original_recorded = true;
+      // creating bee matrix
+      for (int i = 0; i < 8; i += 1) {
+        auto bee_col = tam.col(i);
+        // Eigen::Quaterniond thing(sub_pose.rot.w, sub_pose.rot.x, sub_pose.rot.y, sub_pose.rot.z);
+        // Eigen::Quaterniond thingConj = thing.conjugate();
+        // auto position = thingConj * positions.col(i);
+        auto position = positions.col(i);
+
+        auto direction = directions.col(i);
+        auto orthogonal = position.cross(direction);
+
+        bee_col[0] = direction[0];
+        bee_col[1] = direction[1];
+        bee_col[2] = direction[2];
+        bee_col[3] = orthogonal[0];
+        bee_col[4] = orthogonal[1];
+        bee_col[5] = orthogonal[2];
+      }
+
+      RCLCPP_INFO_STREAM(this->get_logger(), "tam");
+      RCLCPP_INFO_STREAM(this->get_logger(), tam);
+
+      tam_decomp = tam.completeOrthogonalDecomposition();
+
+      rclcpp::sleep_for(3s);
+      Eigen::Vector<double, 6> wrench;
+      wrench << 1, 0, 0, 0, 0, 0;
+      auto values = tam_decomp.solve(wrench);
+      values_norm = values.normalized();
+      values_norm *= 1; 
+
+      Float64MultiArray thursters_msg;
+      thursters_msg.data.insert(thursters_msg.data.begin(),
+                                values_norm.begin(),
+                                values_norm.end());
+      thrusters_pub->publish(thursters_msg);
+
+      loop_rate.sleep();
     }
-
-    auto distance_to_target = glm::distance(sub_pose.pos, target_point);
-    if (distance_to_target < DISTANCE_THRESHOLD + 0.05) {
-      // RCLCPP_INFO(this->get_logger(), "Target reached.");
-      // TODO: In real life, it might a be a good idea to make sure
-      // submarine stays on point (due to buoyancy)
-      this->moving = {.depth = false, .rotation = false, .linear = false};
-      return true;
-    }
-
-    // TODO: Check for cancel
-
-    this->moving = {0};
-    if (adjust_depth_motors(sub_pose, target_point)) {
-      this->moving.depth = true;
-    } else if (!adjust_rotation_motors(sub_pose, target_point)) {
-      this->moving.rotation = true;
-    } else if (!adjust_linear_motors(sub_pose, target_point)) {
-      this->moving.linear = true;
-    }
-
-    Float64MultiArray thursters_msg;
-    thursters_msg.data.insert(thursters_msg.data.begin(),
-                              std::begin(thruster_values),
-                              std::end(thruster_values));
-    thrusters_pub->publish(thursters_msg);
-
-    loop_rate.sleep();
-  }
+  });
+  t.detach();
 
   // # In case of an unexpected exit
   // rospy.logwarn("Action server terminated unexpectedly.")
-  return false;
+  // return false;
+  // TODO: think more this return type since we are going to detach
+  return true;
 }
 
 void MissionPlanner::look_at(glm::vec3 target_point) {
@@ -216,16 +281,17 @@ void MissionPlanner::plan_and_start_task(ObjectCls object, BoundingBox3D bbox) {
     break;
   }
   case ObjectCls::Gate: {
-    //   // Pass in and overshoot a little
-    //   auto direction_2d =
-    //       glm::normalize(glm::vec2{pos} - glm::vec2{sub_pose.pos});
-    //   auto before_2d = glm::vec2{pos} - direction_2d * FAR_ENOUGH;
-    //   auto before = glm::vec3{direction_2d, pos.z};
-    //
-    //   auto overshoot_2d = glm::vec2{pos} + direction_2d * OVERSHOOT;
-    //   auto overshoot = glm::vec3{overshoot_2d, pos.z};
-    //
-    //   steps.insert(steps.end(), {before, overshoot});
+    // Pass in and overshoot a little
+    auto direction_2d =
+        glm::normalize(glm::vec2{pos} - glm::vec2{sub_pose.pos});
+    auto before_2d = glm::vec2{pos} - direction_2d * FAR_ENOUGH;
+    // TODO: find which face is the flat side
+    auto before = glm::vec3{direction_2d, pos.z};
+
+    auto overshoot_2d = glm::vec2{pos} + direction_2d * OVERSHOOT;
+    auto overshoot = glm::vec3{overshoot_2d, pos.z};
+
+    steps.insert(steps.end(), {before, overshoot});
     break;
   }
   case ObjectCls::Shark: {
@@ -239,9 +305,13 @@ void MissionPlanner::plan_and_start_task(ObjectCls object, BoundingBox3D bbox) {
   }
   }
 
-  next_task_idx += 1;
-  scouting = false;
-  send_step(steps[next_step_idx]);
+  if (steps.size() > 1) {
+    next_task_idx += 1;
+    scouting = false;
+    send_step(steps[next_step_idx]);
+  } else {
+    RCLCPP_WARN(this->get_logger(), "NO STEPS");
+  }
 }
 
 bool MissionPlanner::adjust_depth_motors(Pose current_pose,

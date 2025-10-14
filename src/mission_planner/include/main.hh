@@ -4,6 +4,8 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include <rclcpp/rclcpp.hpp>
 
 using namespace std::chrono_literals;
@@ -13,7 +15,7 @@ using OdometryMsg = nav_msgs::msg::Odometry;
 using Float64MultiArray = std_msgs::msg::Float64MultiArray;
 
 // the object's "class"
-enum class ObjectCls {
+enum class ObjectCls : int {
   Cube = 0,
   Rectangle = 1,
   Gate = 2,
@@ -102,11 +104,17 @@ private:
   std::vector<Step> steps;
   int next_step_idx = 0;
 
+  Eigen::Matrix<double, 6, 8> tam;
+  Eigen::CompleteOrthogonalDecomposition<Eigen::Matrix<double, 6, 8, 0, 6, 8>> tam_decomp;
+  Eigen::Matrix<double, 3, 8> directions;
+  Eigen::Matrix<double, 3, 8> positions;
+  Eigen::Matrix<double, 8, 1> values_norm;
   float thruster_values[TOTAL_THRUSTERS];
   Moving moving;
   Pose sub_pose;
   int map_objects_count;
   MapMsg map_cache;
+
 
   void handle_map_msg(const MapMsg::SharedPtr map);
   void handle_odometry_msg(const OdometryMsg::SharedPtr imu);
