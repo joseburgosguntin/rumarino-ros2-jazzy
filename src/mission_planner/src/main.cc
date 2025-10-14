@@ -1,8 +1,9 @@
 #include <main.hh>
 
 MissionPlanner::MissionPlanner() : Node("mission_planner") {
+  auto map_qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
   map_sub = this->create_subscription<MapMsg>(
-      "/hydrus/map", 10,
+      "/hydrus/map", map_qos,
       [this](const MapMsg::SharedPtr map) { this->handle_map_msg(map); });
   odometry_sub = this->create_subscription<OdometryMsg>(
       "/hydrus/odometry", 10, [this](const OdometryMsg::SharedPtr odometry) {
