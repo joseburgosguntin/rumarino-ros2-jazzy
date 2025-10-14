@@ -20,6 +20,7 @@ sudo dnf install ros-jazzy-vision-msgs
 sudo dnf install freetype-devel
 sudo dnf install SDL2-devel
 sudo dnf install glm-devel
+sudo dnf install eigen3-devel
 ```
 
 ### Clone and go in repo

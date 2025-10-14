@@ -11,6 +11,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(interfaces REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # Include headers
 include_directories(include)
@@ -22,6 +23,8 @@ ament_target_dependencies(mission_planner_node
   interfaces
   nav_msgs
 )
+
+target_include_directories(mission_planner_node PRIVATE ${EIGEN3_INCLUDE_DIR})
 
 # Install the executable
 install(TARGETS
