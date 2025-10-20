@@ -1,0 +1,25 @@
+# ROS2 Parameters for ORB-SLAM3 Node
+
+orb_slam3_mono:
+  ros__parameters:
+    # ORB-SLAM3 Configuration Files
+    vocabulary_path: "/home/cesar/Projects/auv/third_party/ORBvoc.txt"
+    settings_path: "/home/cesar/Projects/auv/src/orb_slam/config/webcam.yaml"
+    use_viewer: true
+    
+    # Sensor Configuration
+    use_depth: false  # Set to true for RGB-D mode, false for monocular mode
+    
+    # Topic names
+    image_topic: "/camera1/image_raw"
+    depth_topic: "/camera1/image_raw"  # Only used if use_depth is true
+    pose_topic: "orb_slam3/camera_pose"
+    path_topic: "orb_slam3/camera_path"
+    
+    # Frame IDs
+    world_frame_id: "world"
+    camera_frame_id: "camera"
+    
+    # Publisher settings
+    queue_size: 10
+    publish_tf: true

@@ -4,3 +4,9 @@
 [submodule "vendor/stonefish_ros2"]
 	path = vendor/stonefish_ros2
 	url = git@github.com:JuanDelPueblo/stonefish_ros2.git
+[submodule "vendor/Pangolin"]
+	path = vendor/Pangolin
+	url = git@github.com:stevenlovegrove/Pangolin.git
+[submodule "vendor/ORB_SLAM3"]
+	path = vendor/ORB_SLAM3
+	url = git@github.com:Cruiz102/ORB_SLAM3.git

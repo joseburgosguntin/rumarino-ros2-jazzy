@@ -1,0 +1,25 @@
+# ROS2 Parameters for ORB-SLAM3 Node - RGB-D Mode
+
+orb_slam3_node:
+  ros__parameters:
+    # ORB-SLAM3 Configuration Files
+    vocabulary_path: "/home/cesar/Projects/ORB_SLAM3/Vocabulary/ORBvoc.txt"
+    settings_path: "/home/cesar/Projects/ORB_SLAM3/ROS2/config/realsense.yaml"
+    use_viewer: true
+    
+    # Sensor Configuration
+    use_depth: true  # RGB-D mode enabled
+    
+    # Topic names (RealSense D435 example)
+    image_topic: "/camera/color/image_raw"
+    depth_topic: "/camera/depth/image_rect_raw"
+    pose_topic: "orb_slam3/camera_pose"
+    path_topic: "orb_slam3/camera_path"
+    
+    # Frame IDs
+    world_frame_id: "world"
+    camera_frame_id: "camera_link"
+    
+    # Publisher settings
+    queue_size: 10
+    publish_tf: true

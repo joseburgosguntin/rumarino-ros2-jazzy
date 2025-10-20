@@ -14,14 +14,21 @@ MissionPlanner::MissionPlanner() : Node("mission_planner") {
       this->create_publisher<Float64MultiArray>("/hydrus/thrusters", 10);
 
 
+  depth_directions << +0.000, +0.000, +0.000, +0.000, // dx
+                      +0.000, +0.000, +0.000, +0.000, // dy
+                      +0.999, +0.999, +0.999, +0.999; // dz
 
-  directions << +0.382, +0.382, -0.382, -0.382, +0.000, +0.000, +0.000, +0.000, // dx
-                -0.923, +0.923, -0.923, +0.000, +0.000, +0.000, +0.000, +0.000, // dy
-                +0.000, +0.000, +0.000, +0.000, +0.999, +0.999, +0.999, +0.999; // dz
-                                                                                //
-  positions << +0.198, +0.198, -0.198, -0.198, +0.211, +0.211, -0.211, -0.211, // x
-               +0.407, -0.408, +0.407, -0.408, +0.169, -0.169, +0.169, -0.169, // y
-               +0.000, +0.000, +0.000, +0.000, +0.000, +0.000, +0.000, +0.000; // z
+  depth_positions << +0.211, +0.211, -0.211, -0.211, // x
+                     +0.169, -0.169, +0.169, -0.169, // y
+                     +0.000, +0.000, +0.000, +0.000; // z
+
+  // directions << +0.382, +0.382, -0.382, -0.382, +0.000, +0.000, +0.000, +0.000, // dx
+  //               -0.923, +0.923, -0.923, +0.000, +0.000, +0.000, +0.000, +0.000, // dy
+  //               +0.000, +0.000, +0.000, +0.000, +0.999, +0.999, +0.999, +0.999; // dz
+  //                                                                               //
+  // positions << +0.198, +0.198, -0.198, -0.198, +0.211, +0.211, -0.211, -0.211, // x
+  //              +0.407, -0.408, +0.407, -0.408, +0.169, -0.169, +0.169, -0.169, // y
+  //              +0.000, +0.000, +0.000, +0.000, +0.000, +0.000, +0.000, +0.000; // z
 
 
   RCLCPP_INFO_STREAM(this->get_logger(), "values_norm");
@@ -108,15 +115,42 @@ bool MissionPlanner::navigate(glm::vec3 target_point) {
       //                           std::end(thruster_values));
       // thrusters_pub->publish(thursters_msg);
 
+      // // creating bee matrix
+      // for (int i = 0; i < 8; i += 1) {
+      //   auto bee_col = tam.col(i);
+      //   // Eigen::Quaterniond thing(sub_pose.rot.w, sub_pose.rot.x, sub_pose.rot.y, sub_pose.rot.z);
+      //   // Eigen::Quaterniond thingConj = thing.conjugate();
+      //   // auto position = thingConj * positions.col(i);
+      //   auto position = positions.col(i);
+      //
+      //   auto direction = directions.col(i);
+      //   auto orthogonal = position.cross(direction);
+      //
+      //   bee_col[0] = direction[0];
+      //   bee_col[1] = direction[1];
+      //   bee_col[2] = direction[2];
+      //   bee_col[3] = orthogonal[0];
+      //   bee_col[4] = orthogonal[1];
+      //   bee_col[5] = orthogonal[2];
+      // }
+      //
+
+      // rclcpp::sleep_for(3s);
+      // Eigen::Vector<double, 6> wrench;
+      // wrench << 0, 0, 1, 0, 0, 0;
+      // auto values = tam_decomp.solve(wrench);
+      // values_norm = values.normalized();
+      // values_norm *= 1; 
+
       // creating bee matrix
       for (int i = 0; i < 8; i += 1) {
-        auto bee_col = tam.col(i);
+        auto bee_col = depth_tam.col(i);
         // Eigen::Quaterniond thing(sub_pose.rot.w, sub_pose.rot.x, sub_pose.rot.y, sub_pose.rot.z);
         // Eigen::Quaterniond thingConj = thing.conjugate();
         // auto position = thingConj * positions.col(i);
-        auto position = positions.col(i);
+        auto position = depth_positions.col(i);
 
-        auto direction = directions.col(i);
+        auto direction = depth_directions.col(i);
         auto orthogonal = position.cross(direction);
 
         bee_col[0] = direction[0];
@@ -130,13 +164,16 @@ bool MissionPlanner::navigate(glm::vec3 target_point) {
       RCLCPP_INFO_STREAM(this->get_logger(), "tam");
       RCLCPP_INFO_STREAM(this->get_logger(), tam);
 
-      tam_decomp = tam.completeOrthogonalDecomposition();
+      depth_tam_decomp = depth_tam.completeOrthogonalDecomposition();
+      // tam_decomp = tam.completeOrthogonalDecomposition();
 
       rclcpp::sleep_for(3s);
       Eigen::Vector<double, 6> wrench;
-      wrench << 1, 0, 0, 0, 0, 0;
-      auto values = tam_decomp.solve(wrench);
-      values_norm = values.normalized();
+      wrench << 0, 0, 1, 0, 0, 0;
+      auto values = depth_tam_decomp.solve(wrench);
+      Eigen::Vector<double, 8> values2; 
+      values2 << 0, 0, 0, 0, values(0), values(1), values(2), values(3);
+      values_norm = values2.normalized();
       values_norm *= 1; 
 
       Float64MultiArray thursters_msg;

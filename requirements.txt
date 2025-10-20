@@ -1,0 +1,12 @@
+numpy>=2.3.2
+opencv-python>=4.11.0.86
+ultralytics>=8.3.182
+
+#Debug Tools
+pdbpp
+
+
+#ros2 Build Dependencies
+empy
+lark-parser
+catkin_pkg

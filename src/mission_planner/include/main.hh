@@ -104,6 +104,10 @@ private:
   std::vector<Step> steps;
   int next_step_idx = 0;
 
+  Eigen::Matrix<double, 6, 4> depth_tam;
+  Eigen::CompleteOrthogonalDecomposition<Eigen::Matrix<double, 6, 4, 0, 6, 4>> depth_tam_decomp;
+  Eigen::Matrix<double, 3, 4> depth_directions;
+  Eigen::Matrix<double, 3, 4> depth_positions;
   Eigen::Matrix<double, 6, 8> tam;
   Eigen::CompleteOrthogonalDecomposition<Eigen::Matrix<double, 6, 8, 0, 6, 8>> tam_decomp;
   Eigen::Matrix<double, 3, 8> directions;
