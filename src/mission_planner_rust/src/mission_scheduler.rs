@@ -1,9 +1,9 @@
+use crate::mission::{Mission, MissionData, MissionResult};
 use futures::executor::ThreadPool;
 use futures::future::BoxFuture;
-use crate::mission::{Mission, MissionData, MissionResult};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, sleep};
 
 pub type MissionBox = Box<dyn Mission>;
@@ -27,23 +27,29 @@ impl MissionThreadData {
         }
     }
 
-    fn with_mission_list(&self, func: impl FnOnce(&mut MissionVec) -> Option<MissionBox>, is_concurrent: bool) -> Option<MissionBox> {
+    fn with_mission_list(
+        &self,
+        func: impl FnOnce(&mut MissionVec) -> Option<MissionBox>,
+        is_concurrent: bool,
+    ) -> Option<MissionBox> {
         let mut guard = if is_concurrent {
-            self.conc_mission_list.try_lock().expect("Concurrent mission lock is poisoned!")
+            self.conc_mission_list
+                .try_lock()
+                .expect("Concurrent mission lock is poisoned!")
         } else {
-            self.mission_list.try_lock().expect("Mission lock is poisoned!")
+            self.mission_list
+                .try_lock()
+                .expect("Mission lock is poisoned!")
         };
         func(&mut guard)
     }
 
     pub fn pop_front(&self) -> Option<Box<dyn Mission>> {
-        let func = move |mission_list: &mut MissionVec| {
-            mission_list.pop_front()
-        };
+        let func = move |mission_list: &mut MissionVec| mission_list.pop_front();
         self.with_mission_list(func, false)
     }
 
-    pub fn push_back(&self, mission : impl Mission + 'static) -> Option<MissionBox> {
+    pub fn push_back(&self, mission: impl Mission + 'static) -> Option<MissionBox> {
         let func = move |mission_list: &mut MissionVec| {
             mission_list.push_back(Box::new(mission));
             None
@@ -52,12 +58,11 @@ impl MissionThreadData {
     }
 }
 
-
 pub struct MissionScheduler {
     normal_handle: Option<JoinHandle<()>>,
     concurrent_handle: Option<JoinHandle<()>>,
     pool: ThreadPool,
-    scheduler_data : Arc<MissionThreadData>,
+    scheduler_data: Arc<MissionThreadData>,
 }
 
 impl MissionScheduler {
@@ -121,20 +126,20 @@ impl MissionScheduler {
     //     self.concurrent_mission_list.append(mission);
     // }
     pub fn add_async_thread<F>(&self, func: F)
-    where F : FnOnce(Arc<MissionThreadData>) -> BoxFuture<'static, ()>
+    where
+        F: FnOnce(Arc<MissionThreadData>) -> BoxFuture<'static, ()>,
     {
         let future = func(self.scheduler_data.clone());
         self.pool.spawn_ok(future);
-
     }
-   
+
     pub fn start(&mut self) {
         let scheduler_data = self.scheduler_data.clone();
         let normal_func = move || {
             let mut stop = false;
             let data = &scheduler_data.mission_data;
 
-            while ! stop {
+            while !stop {
                 stop = scheduler_data.stop.load(Ordering::Relaxed);
 
                 let mission = scheduler_data.pop_front();
@@ -161,7 +166,6 @@ impl MissionScheduler {
                     }
                 };
 
-
                 sleep(std::time::Duration::from_millis(1));
             }
         };
@@ -170,9 +174,10 @@ impl MissionScheduler {
         let concurrent_func = move || {
             let mut stop = false;
             let data = &scheduler_data.mission_data;
-            while ! stop {
+            while !stop {
                 stop = scheduler_data.stop.load(Ordering::Relaxed);
-                let getter = scheduler_data.conc_mission_list
+                let getter = scheduler_data
+                    .conc_mission_list
                     .try_lock()
                     .expect("Concurrent mission lock is poisoned!");
                 for mission in &*getter {
@@ -180,7 +185,10 @@ impl MissionScheduler {
                     match res {
                         MissionResult::Ok => (),
                         MissionResult::Skip => {
-                            println!("{} mission skipped! Concurrent missions should never be skippable", mission.name());
+                            println!(
+                                "{} mission skipped! Concurrent missions should never be skippable",
+                                mission.name()
+                            );
                             scheduler_data.stop.store(true, Ordering::Relaxed);
                             stop = true;
                         }
@@ -194,13 +202,12 @@ impl MissionScheduler {
                             stop = true;
                         }
                     };
-                };
+                }
 
                 sleep(std::time::Duration::from_millis(100));
             }
         };
 
-        
         let normal_handle = thread::spawn(normal_func);
         let conc_handle = thread::spawn(concurrent_func);
         self.normal_handle = Some(normal_handle);
@@ -215,7 +222,11 @@ impl MissionScheduler {
         let Some(conc_handle) = self.concurrent_handle.take() else {
             return;
         };
-        normal_handle.join().expect("Failed to join mission handle!");
-        conc_handle.join().expect("Failed to join concurrent mission handle!");
+        normal_handle
+            .join()
+            .expect("Failed to join mission handle!");
+        conc_handle
+            .join()
+            .expect("Failed to join concurrent mission handle!");
     }
 }

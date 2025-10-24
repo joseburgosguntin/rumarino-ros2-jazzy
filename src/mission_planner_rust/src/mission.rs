@@ -1,6 +1,9 @@
-use std::sync::{Mutex, atomic::{AtomicBool, AtomicUsize}};
-use r2r::interfaces::msg::*;
 use r2r::geometry_msgs::msg::Pose;
+use r2r::interfaces::msg::*;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, AtomicUsize},
+};
 
 #[allow(unused)]
 pub enum MissionResult {
@@ -12,12 +15,12 @@ pub enum MissionResult {
 
 #[derive(Debug)]
 pub struct MissionData {
-    pub example_flag : AtomicBool,
-    pub example_flag_request : AtomicBool,
-    pub cached_map : Mutex<Map>,
-    pub scouting : AtomicBool,
-    pub map_objects_count : AtomicUsize, //It is possible this being atomic could cause problems
-    pub pose : Mutex<Pose>,
+    pub example_flag: AtomicBool,
+    pub example_flag_request: AtomicBool,
+    pub cached_map: Mutex<Map>,
+    pub scouting: AtomicBool,
+    pub map_objects_count: AtomicUsize, //It is possible this being atomic could cause problems
+    pub pose: Mutex<Pose>,
 }
 
 impl MissionData {
@@ -28,12 +31,12 @@ impl MissionData {
             cached_map: Mutex::new(Map::default()),
             scouting: AtomicBool::new(true),
             map_objects_count: AtomicUsize::new(0),
-            pose : Mutex::new(Pose::default())
+            pose: Mutex::new(Pose::default()),
         }
     }
 }
 
-pub trait Task : Send + Sync {
+pub trait Task: Send + Sync {
     fn run(&self, data: &MissionData) -> MissionResult;
     fn repair_run(&self, data: &MissionData) -> MissionResult;
     fn name(&self) -> &String;
@@ -42,7 +45,7 @@ pub trait Task : Send + Sync {
 pub struct RustTask {
     pub name: String,
     func: Option<fn(&MissionData) -> MissionResult>,
-    repair_func: Option<fn(&MissionData) -> MissionResult>
+    repair_func: Option<fn(&MissionData) -> MissionResult>,
 }
 
 fn run_with(func: Option<fn(&MissionData) -> MissionResult>, data: &MissionData) -> MissionResult {
@@ -53,8 +56,11 @@ fn run_with(func: Option<fn(&MissionData) -> MissionResult>, data: &MissionData)
 }
 
 impl RustTask {
-    pub fn new(name: String, func: Option< fn(&MissionData) -> MissionResult>,
-    repair_func: Option<fn(&MissionData)-> MissionResult>) -> RustTask {
+    pub fn new(
+        name: String,
+        func: Option<fn(&MissionData) -> MissionResult>,
+        repair_func: Option<fn(&MissionData) -> MissionResult>,
+    ) -> RustTask {
         RustTask {
             name,
             func,
@@ -80,18 +86,16 @@ pub struct CommonMission {
     pub task_list: Vec<Box<dyn Task>>,
 }
 
-pub trait Mission : Send + Sync {
+pub trait Mission: Send + Sync {
     fn run(&self, data: &MissionData) -> MissionResult;
     fn name(&self) -> &String;
 }
 
-impl CommonMission {
-    
-}
+impl CommonMission {}
 impl Mission for CommonMission {
     fn run(&self, data: &MissionData) -> MissionResult {
         if self.task_list.is_empty() {
-            return MissionResult::Ok
+            return MissionResult::Ok;
         }
 
         let mut res = MissionResult::Ok;
@@ -103,9 +107,7 @@ impl Mission for CommonMission {
                     task_res
                 }
                 //TODO
-                MissionResult::Err(_) => {
-                    task.repair_run(data)
-                }
+                MissionResult::Err(_) => task.repair_run(data),
                 _ => task_res,
             };
             if let MissionResult::Err(_) = res {

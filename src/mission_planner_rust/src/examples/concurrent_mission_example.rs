@@ -15,9 +15,6 @@ fn conc_example(data: &MissionData) -> MissionResult {
 pub fn new() -> impl Mission {
     let name = "concurrent-mission-example".to_string();
     let task = RustTask::new("conc-example-task".to_string(), Some(conc_example), None);
-    let task_list: Vec<Box<dyn Task>> =  vec![
-        Box::new(task)
-    ];
+    let task_list: Vec<Box<dyn Task>> = vec![Box::new(task)];
     CommonMission { name, task_list }
 }
-
