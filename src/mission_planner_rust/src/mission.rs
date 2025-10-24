@@ -1,7 +1,8 @@
-use std::sync::{Mutex, atomic::{AtomicBool, AtomicI32, AtomicUsize}};
+use std::sync::{Mutex, atomic::{AtomicBool, AtomicUsize}};
 use r2r::interfaces::msg::*;
 use r2r::geometry_msgs::msg::Pose;
 
+#[allow(unused)]
 pub enum MissionResult {
     Ok,
     Err(String),

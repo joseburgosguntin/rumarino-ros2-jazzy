@@ -54,8 +54,8 @@ impl MissionThreadData {
 
 
 pub struct MissionScheduler {
-    normal_handle: Option<thread::JoinHandle<()>>,
-    concurrent_handle: Option<thread::JoinHandle<()>>,
+    normal_handle: Option<JoinHandle<()>>,
+    concurrent_handle: Option<JoinHandle<()>>,
     pool: ThreadPool,
     scheduler_data : Arc<MissionThreadData>,
 }
