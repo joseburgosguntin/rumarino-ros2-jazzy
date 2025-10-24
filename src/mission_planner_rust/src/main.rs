@@ -113,14 +113,16 @@ fn add_ros_topics(scheduler: &MissionScheduler) -> Node {
 }
 
 fn main() {
-    let scheduler = MissionScheduler::start();
+    let mut scheduler = MissionScheduler::new();
     let mut node = add_ros_topics(&scheduler);
 
-    scheduler.run();
+    scheduler.start();
     let start = Instant::now();
+    //This is to give time to start oneshot_map
     while start.elapsed() < Duration::from_secs(15) {
         node.spin_once(Duration::from_millis(100));
     }
+    scheduler.stop();
 }
 
 #[cfg(test)]
@@ -195,15 +197,14 @@ mod tests {
         ];
         let conc_mission_list = VecDeque::from(conc_mission_list);
 
-        let scheduler = MissionScheduler::start();
+        let mut scheduler = MissionScheduler::new();
         scheduler.append(mission_list);
         scheduler.conc_append(conc_mission_list);
         let _data = scheduler.get_data();
 
-        let start = Instant::now();
-        scheduler.run();
+        scheduler.start();
         let mut node = add_example_ros_topics(&scheduler);
-        while start.elapsed() < Duration::from_secs(15) {
+        while ! scheduler.is_waiting() {
             node.spin_once(Duration::from_millis(100));
         }
         scheduler.stop();

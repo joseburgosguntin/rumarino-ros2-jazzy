@@ -4,7 +4,7 @@ use crate::mission::{Mission, MissionData};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{self, sleep};
+use std::thread::{self, JoinHandle, sleep};
 
 pub type MissionBox = Box<dyn Mission>;
 pub type MissionVec = VecDeque<MissionBox>;
@@ -56,17 +56,18 @@ impl MissionThreadData {
 
 
 pub struct MissionScheduler {
-    normal_handle: thread::JoinHandle<()>,
-    concurrent_handle: thread::JoinHandle<()>,
+    normal_handle: Option<thread::JoinHandle<()>>,
+    concurrent_handle: Option<thread::JoinHandle<()>>,
     pool: ThreadPool,
     scheduler_data : Arc<MissionThreadData>,
 }
 
 impl MissionScheduler {
-    fn new(normal_handle: thread::JoinHandle<()>, concurrent_handle: thread::JoinHandle<()>, scheduler_data: Arc<MissionThreadData>) -> Self {
+    pub fn new() -> Self {
+        let scheduler_data = Arc::new(MissionThreadData::new());
         Self {
-            normal_handle,
-            concurrent_handle,
+            normal_handle: None,
+            concurrent_handle: None,
             scheduler_data,
             pool: ThreadPool::new().expect("Failed to create ThreadPool"),
         }
@@ -129,24 +130,14 @@ impl MissionScheduler {
 
     }
    
-    pub fn start() -> Self {
-
-        let scheduler_data_orig = Arc::new(MissionThreadData::new());
-
-
-        let scheduler_data = scheduler_data_orig.clone();
+    pub fn start(&mut self) {
+        let scheduler_data = self.scheduler_data.clone();
         let normal_func = move || {
             let mut stop = false;
             let data = &scheduler_data.mission_data;
 
             while ! stop {
-                let run = scheduler_data.run.load(Ordering::Relaxed);
                 stop = scheduler_data.stop.load(Ordering::Relaxed);
-                if ! run {
-                    sleep(std::time::Duration::from_millis(1));
-                    continue
-                }
-
 
                 let mission = scheduler_data.pop_front();
                 let Some(mission) = mission else {
@@ -175,18 +166,12 @@ impl MissionScheduler {
             }
         };
 
-        let scheduler_data = scheduler_data_orig.clone();
+        let scheduler_data = self.scheduler_data.clone();
         let concurrent_func = move || {
             let mut stop = false;
             let data = &scheduler_data.mission_data;
             while ! stop {
-                let run = scheduler_data.run.load(Ordering::Relaxed);
                 stop = scheduler_data.stop.load(Ordering::Relaxed);
-                if ! run {
-                    sleep(std::time::Duration::from_millis(1));
-                    continue
-                }
-
                 let getter = scheduler_data.conc_mission_list
                     .try_lock()
                     .expect("Concurrent mission lock is poisoned!");
@@ -214,16 +199,19 @@ impl MissionScheduler {
         
         let normal_handle = thread::spawn(normal_func);
         let conc_handle = thread::spawn(concurrent_func);
-        MissionScheduler::new(normal_handle, conc_handle, scheduler_data_orig)
+        self.normal_handle = Some(normal_handle);
+        self.concurrent_handle = Some(conc_handle);
     }
 
-    pub fn run(&self) {
-        self.scheduler_data.run.store(true, Ordering::Relaxed);
-    }
-
-    pub fn stop(self) {
+    pub fn stop(&mut self) {
         self.scheduler_data.stop.store(true, Ordering::Relaxed);
-        self.normal_handle.join().expect("Failed to join mission handle!");
-        self.concurrent_handle.join().expect("Failed to join concurrent mission handle!");
+        let Some(normal_handle) = self.normal_handle.take() else {
+            return;
+        };
+        let Some(conc_handle) = self.concurrent_handle.take() else {
+            return;
+        };
+        normal_handle.join().expect("Failed to join mission handle!");
+        conc_handle.join().expect("Failed to join concurrent mission handle!");
     }
 }
