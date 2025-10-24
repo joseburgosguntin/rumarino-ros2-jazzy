@@ -7,7 +7,7 @@ fn conc_example(data: &MissionData) -> MissionResult {
         data.example_flag.store(true, Ordering::Relaxed);
         println!("Wrote flag!");
     }
-    Ok(())
+    MissionResult::Ok
 }
 
 pub fn new() -> impl Mission {

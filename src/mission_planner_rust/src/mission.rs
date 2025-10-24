@@ -1,7 +1,13 @@
 use std::sync::{Mutex, atomic::{AtomicBool, AtomicI32, AtomicUsize}};
 use r2r::interfaces::msg::*;
 use r2r::geometry_msgs::msg::Pose;
-pub type MissionResult = Result<(), bool>;
+
+pub enum MissionResult {
+    Ok,
+    Err(String),
+    Skip,
+    Deferred,
+}
 
 #[derive(Debug)]
 pub struct MissionData {
@@ -40,7 +46,7 @@ pub struct RustTask {
 
 fn run_with(func: Option<fn(&MissionData) -> MissionResult>, data: &MissionData) -> MissionResult {
     let Some(func) = func else {
-        return Err(false);
+        return MissionResult::Err("No function available".to_owned());
     };
     func(data)
 }
@@ -84,27 +90,27 @@ impl CommonMission {
 impl Mission for CommonMission {
     fn run(&self, data: &MissionData) -> MissionResult {
         if self.task_list.is_empty() {
-            return Ok(())
+            return MissionResult::Ok
         }
 
-        let mut res = Ok(());
+        let mut res = MissionResult::Ok;
         for task in &self.task_list {
             let task_res = task.run(data);
             res = match task_res {
-                Ok(_) => task_res,
-                Err(skip) => {
-                    if skip {
-                        task_res
-                    } else {
-                        task.repair_run(data)
-                    }
-                },
-
-            };
-            if let Err(skip) = res {
-                if ! skip {
-                    break
+                MissionResult::Deferred => {
+                    println!("Task {} deferred!", task.name());
+                    task_res
                 }
+                //TODO
+                MissionResult::Err(_) => {
+                    task.repair_run(data)
+                }
+                _ => task_res,
+            };
+            if let MissionResult::Err(_) = res {
+                break;
+            } else if let MissionResult::Skip = res {
+                break;
             }
         }
         res

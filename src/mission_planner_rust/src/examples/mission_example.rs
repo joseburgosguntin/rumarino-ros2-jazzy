@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 
 fn example(_data: &MissionData) -> MissionResult {
     println!("Hello from Rust!");
-    Err(false)
+    MissionResult::Err("Example Error".to_owned())
 }
 
 fn repair_example(data: &MissionData) -> MissionResult {
@@ -16,7 +16,7 @@ fn repair_example(data: &MissionData) -> MissionResult {
     }
     println!("Got flag!");
 
-    Ok(())
+    MissionResult::Ok
 }
 
 pub fn new() -> impl Mission {

@@ -1,6 +1,6 @@
 use futures::executor::ThreadPool;
 use futures::future::BoxFuture;
-use crate::mission::{Mission, MissionData};
+use crate::mission::{Mission, MissionData, MissionResult};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,7 +12,6 @@ pub struct MissionThreadData {
     mission_list: Mutex<MissionVec>,
     conc_mission_list: Mutex<MissionVec>,
     pub mission_data: MissionData,
-    run: AtomicBool,
     pub stop: AtomicBool,
     waiting: AtomicBool,
 }
@@ -23,7 +22,6 @@ impl MissionThreadData {
             mission_list: Mutex::new(VecDeque::new()),
             conc_mission_list: Mutex::new(VecDeque::new()),
             mission_data: MissionData::new(),
-            run: AtomicBool::new(false),
             stop: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
         }
@@ -148,16 +146,18 @@ impl MissionScheduler {
                 };
                 let res = mission.run(data);
                 match res {
-                    Ok(_) => (),
-                    Err(skip) => {
-                        if skip {
-                            println!("{} mission skipped!", mission.name());
-                        }
-                        else {
-                            println!("{} mission failed!", mission.name());
-                            scheduler_data.stop.store(true, Ordering::Relaxed);
-                            stop = true;
-                        }
+                    MissionResult::Ok => (),
+                    MissionResult::Skip => {
+                        println!("{} mission skipped!", mission.name());
+                    }
+                    MissionResult::Deferred => {
+                        //Currently this should never happen
+                        println!("{} mission deferred!", mission.name());
+                    }
+                    MissionResult::Err(string) => {
+                        println!("{} mission failed! Error {}", mission.name(), string);
+                        scheduler_data.stop.store(true, Ordering::Relaxed);
+                        stop = true;
                     }
                 };
 
@@ -178,16 +178,20 @@ impl MissionScheduler {
                 for mission in &*getter {
                     let res = mission.run(data);
                     match res {
-                        Ok(_) => (),
-                        Err(skip) => {
-                            if skip {
-                                println!("{} mission skipped!", mission.name());
-                            }
-                            else {
-                                println!("{} mission failed!", mission.name());
-                                scheduler_data.stop.store(true, Ordering::Relaxed);
-                                stop = true;
-                            }
+                        MissionResult::Ok => (),
+                        MissionResult::Skip => {
+                            println!("{} mission skipped! Concurrent missions should never be skippable", mission.name());
+                            scheduler_data.stop.store(true, Ordering::Relaxed);
+                            stop = true;
+                        }
+                        MissionResult::Deferred => {
+                            //Currently this should never happen
+                            println!("{} mission deferred!", mission.name());
+                        }
+                        MissionResult::Err(string) => {
+                            println!("{} mission failed! Error {}", mission.name(), string);
+                            scheduler_data.stop.store(true, Ordering::Relaxed);
+                            stop = true;
                         }
                     };
                 };
