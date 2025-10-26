@@ -8,5 +8,6 @@ inherits = "release"
 
 [dependencies]
 futures = "0.3.31"
+nalgebra = "0.34.1"
 r2r = "0.9.5"
 tokio = { version = "1.48.0", features = ["full"] }
