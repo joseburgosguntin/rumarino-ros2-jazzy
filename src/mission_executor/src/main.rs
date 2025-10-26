@@ -10,22 +10,30 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use futures::StreamExt;
+use nalgebra::{Vector3, Quaternion};
 use r2r::{Node, ParameterValue, QosProfile};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, channel};
 
+struct Pose {
+    pos: Vector3<f64>,
+    rot: Quaternion<f64>,
+}
+
 struct MissionExecutor {
     pub cached_map: Mutex<MapMsg>,
     pub map_objects_count: AtomicUsize,
-    // TODO: add pose field using some nalgebra type
+    pub pose: Mutex<Pose>,
     pub mission: Box<dyn Mission>,
 }
 
 impl MissionExecutor {
     pub fn new(mission: Box<dyn Mission>) -> Self {
+        let origin = Pose { pos: Vector3::zeros(), rot: Quaternion::new(1.0, 0.0, 0.0, 0.0) };
         Self {
             cached_map: Mutex::new(MapMsg::default()),
             map_objects_count: AtomicUsize::new(0),
+            pose: Mutex::new(origin),
             mission,
         }
     }
@@ -75,26 +83,25 @@ async fn handle_map(
         .store(map_objects_count + 1, Ordering::Relaxed);
 }
 
-fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
+async fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
     let p = odometry.pose.pose.position;
     let o = odometry.pose.pose.orientation;
 
-    // let mut cur_pos = data
-    //     .mission_data
-    //     .pose
-    //     .try_lock()
-    //     .expect("Failed to lock pose");
-    // cur_pos.position = p;
-    // cur_pos.orientation = o;
+    let mut pose = data.pose.lock().await;
+    pose.pos.x = p.x;
+    pose.pos.y = p.y;
+    pose.pos.z = p.z;
+    pose.rot.w = o.w;
+    pose.rot.i = o.x;
+    pose.rot.j = o.y;
+    pose.rot.k = o.z;
 
-    // r2r::log_info!(
-    //     "mission_planner",
-    //     "Odometry {:#?} {:#?}",
-    //     cur_pos.position,
-    //     cur_pos.orientation
-    // );
-
-    //Skipped yaw stuff
+    r2r::log_info!(
+        "mission_planner",
+        "Odometry {:#?} {:#?}",
+        pose.pos,
+        pose.rot
+    );
 }
 
 #[tokio::main]
