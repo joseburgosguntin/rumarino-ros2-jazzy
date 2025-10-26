@@ -26,7 +26,7 @@ else()
 endif()
 
 install(PROGRAMS
-  ${CMAKE_SOURCE_DIR}/target/colcon/${PROJECT_NAME}${SUFFIX}
+  ${CMAKE_SOURCE_DIR}/../../target/colcon/${PROJECT_NAME}${SUFFIX}
   DESTINATION lib/${PROJECT_NAME}
 )
 

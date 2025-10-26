@@ -7,3 +7,6 @@ resolver = "3"
 members = [
     "src/mission_executor"
     ]
+
+[profile.colcon]
+inherits = "release"
