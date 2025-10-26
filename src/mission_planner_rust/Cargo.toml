@@ -1,8 +1,0 @@
-[package]
-name = "mission_planner"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-futures = { version = "0.3.31", features = ["thread-pool"] }
-r2r = "0.9.5"
