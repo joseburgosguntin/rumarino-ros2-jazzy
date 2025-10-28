@@ -1,4 +1,6 @@
 #![allow(unused)]
+
+#![deny(unused_must_use)]
 //! This process should just realize a `Mission` passed as a ROS arg (somehow) and terminate.
 //! A `Mission` is a scenario where the submarine must react to diferent `ObjectCls` with their
 //! respective sequences of actions.
@@ -198,7 +200,7 @@ async fn main() {
 
     let consume_odometry_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = odometry_sub.next().await {
-            handle_odometry(&td, msg);
+            handle_odometry(&td, msg).await;
         }
     };
 
@@ -244,7 +246,9 @@ async fn main() {
 
             let mut thrusters_msg = Float64MultiArray::default();
             thrusters_msg.data.extend(thurstor_values.iter());
-            thrusters_pub.publish(&thrusters_msg);
+            thrusters_pub
+                .publish(&thrusters_msg)
+                .expect("Failed to publish");
 
             prev_pose_err = pose_err;
             prev_now = now;
