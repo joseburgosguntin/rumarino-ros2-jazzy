@@ -3,9 +3,6 @@ name = "mission_executor"
 version = "0.1.0"
 edition = "2024"
 
-[profile.colcon]
-inherits = "release"
-
 [dependencies]
 futures = "0.3.31"
 nalgebra = "0.34.1"
