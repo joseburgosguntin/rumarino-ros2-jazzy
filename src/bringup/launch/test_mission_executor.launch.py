@@ -1,15 +1,18 @@
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 
 def generate_launch_description():
     return LaunchDescription([
-        ExecuteProcess(
-            cmd=['/home/joseburgosguntin/dev/python/hydrus-software-stack/target/debug/mission_planner'],
-            output='screen'
+        Node(
+            package='mission_executor',
+            executable='mission_executor',
+            parameters=[{
+                'mission_name': 'prequalify',
+            }],
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([

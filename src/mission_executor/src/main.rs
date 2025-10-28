@@ -7,14 +7,16 @@ mod missions;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
-use nalgebra::{Vector3, Quaternion};
+use nalgebra::{ArrayStorage, Matrix3x4, Matrix6x4, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
+use r2r::qos::LivelinessPolicy;
 use r2r::{Node, ParameterValue, QosProfile};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, channel};
 
+#[derive(Debug)]
 struct Pose {
     pos: Vector3<f64>,
     rot: Quaternion<f64>,
@@ -24,16 +26,19 @@ struct MissionExecutor {
     pub cached_map: Mutex<MapMsg>,
     pub map_objects_count: AtomicUsize,
     pub pose: Mutex<Pose>,
+    pub goal: Mutex<Vector6<f64>>,
     pub mission: Box<dyn Mission>,
 }
 
 impl MissionExecutor {
     pub fn new(mission: Box<dyn Mission>) -> Self {
         let origin = Pose { pos: Vector3::zeros(), rot: Quaternion::new(1.0, 0.0, 0.0, 0.0) };
+        let goal = Vector6::zeros();
         Self {
             cached_map: Mutex::new(MapMsg::default()),
             map_objects_count: AtomicUsize::new(0),
             pose: Mutex::new(origin),
+            goal: Mutex::new(goal),
             mission,
         }
     }
@@ -87,6 +92,11 @@ async fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
     let p = odometry.pose.pose.position;
     let o = odometry.pose.pose.orientation;
 
+    r2r::log_info!(
+        "mission_planner",
+        "Odometry {p:?} {o:?}",
+    );
+
     let mut pose = data.pose.lock().await;
     pose.pos.x = p.x;
     pose.pos.y = p.y;
@@ -106,6 +116,40 @@ async fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
 
 #[tokio::main]
 async fn main() {
+    // TODO: these should be passed in somehow by the controller
+    // let depth_directions = Matrix3x4::new(
+    //     0.000, 0.000, 0.000, 0.000, // dx
+    //     0.000, 0.000, 0.000, 0.000, // dy
+    //     0.999, 0.999, 0.999, 0.999, // dz
+    // );
+    // let depth_positions = Matrix3x4::new(
+    //     0.211,  0.211, -0.211, -0.211, // x
+    //     0.169, -0.169,  0.169, -0.169, // y
+    //     0.000,  0.000,  0.000,  0.000, // z
+    // );
+    // let mut depth_tam = Matrix6x4::<f64>::default();
+    // assert!(depth_tam.ncols() == 4);
+    // assert!(depth_tam.ncols() == depth_positions.ncols());
+    // assert!(depth_tam.ncols() == depth_directions.ncols());
+    // for i in 0..depth_tam.ncols() {
+    //     let position = depth_positions.column(i);
+    //     let direction = depth_directions.column(i);
+    //     let orthogonal = position.cross(&direction);
+    //     let depth_tam_col = Vector6::new(
+    //         position[0],
+    //         position[1],
+    //         position[2],
+    //         orthogonal[0],
+    //         orthogonal[1],
+    //         orthogonal[2],
+    //     );
+    //     depth_tam.set_column(i, &depth_tam_col);
+    // }
+    // r2r::log_info!("mission_executor", "tam = {depth_tam:?}");
+    //   // let wrench = Vector6::new(0.01, 0.01, 1.0, 0.01, 0.01, 0.01);
+    // let depth_tam_svd = depth_tam.svd(true, true);
+
+
     let ctx = r2r::Context::create().expect("Failed to create r2r context!");
     let mut node = Node::create(ctx, "mission_executor", "namespace").expect("Failed to get Node!");
     let params = node.params.lock().unwrap();
@@ -128,11 +172,19 @@ async fn main() {
     let mut map_sub = node
         .subscribe::<MapMsg>("/hydrus/map", map_qos)
         .expect("Failed to subscribe to map");
+// QoS profile:
+//   Reliability: RELIABLE
+//   History (Depth): UNKNOWN
+//   Durability: VOLATILE
+//   Lifespan: Infinite
+//   Deadline: Infinite
+//   Liveliness: AUTOMATIC
+//   Liveliness lease duration: Infinite
     let mut odometry_sub = node
         .subscribe::<OdometryMsg>("/hydrus/odometry", QosProfile::default())
         .expect("Failed to subscribe to odometry");
     let thrusters_pub = node
-        .create_publisher::<Float64MultiArray>("/hydrus/trusters", QosProfile::default())
+        .create_publisher::<Float64MultiArray>("/hydrus/thrusters", QosProfile::default())
         .expect("Failed to setup thruster publisher");
 
     // TODO: shouldn't this be some sort of priority queue since we wanted to schedule?
@@ -147,6 +199,57 @@ async fn main() {
     let consume_odometry_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = odometry_sub.next().await {
             handle_odometry(&td, msg);
+        }
+    };
+
+    let kp = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
+    let ki = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
+    let kd = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
+
+    let go_to_goal = |td: Arc<MissionExecutor>| async move {
+        let mut sum_err = Vector6::zeros();
+        let mut prev_pose_err = Vector6::zeros();
+        let mut prev_now = Instant::now();
+        loop {
+            let now = Instant::now();
+            let dt = now.duration_since(prev_now).as_secs_f64();
+
+            // TODO: fix odometry_sub so that we actually get updated position
+            let pose = td.pose.lock().await;
+            r2r::log_info!("mission_executor", "pose = {pose:?}");
+            let goal = td.goal.lock().await;
+            let p = pose.pos;
+            let unit = UnitQuaternion::from_quaternion(pose.rot);
+            let (roll, pitch, yaw) = unit.euler_angles();
+            let current_pose = Vector6::new(p.x, p.y, p.z, roll, pitch, yaw);
+
+            let pose_err = *goal - current_pose;
+            let vel_err = (pose_err - prev_pose_err) / dt;
+            sum_err += pose_err * dt;
+
+            let wrench = kp.component_mul(&pose_err) + ki.component_mul(&sum_err) + kd.component_mul(&vel_err);
+            r2r::log_info!("mission_executor", "wrench = {wrench:?}");
+
+            // let values = depth_tam_svd.solve(&wrench, 1e-10).expect("Rank-deficient");
+            // r2r::log_info!("mission_executor", "values = {values:?}");
+            let mut thurstor_values = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::zeros();
+            thurstor_values[4] = wrench.z;
+            thurstor_values[5] = wrench.z;
+            thurstor_values[6] = wrench.z;
+            thurstor_values[7] = wrench.z;
+            let minn = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(-5.0);
+            let maxx = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(5.0);
+            thurstor_values = thurstor_values.simd_clamp(minn, maxx);
+            r2r::log_info!("mission_executor", "values_norm = {thurstor_values:?}");
+
+            let mut thrusters_msg = Float64MultiArray::default();
+            thrusters_msg.data.extend(thurstor_values.iter());
+            thrusters_pub.publish(&thrusters_msg);
+
+            prev_pose_err = pose_err;
+            prev_now = now;
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     };
 
@@ -166,6 +269,9 @@ async fn main() {
     tokio::spawn(consume_map_sub(Arc::clone(&td)));
     tokio::spawn(consume_odometry_sub(Arc::clone(&td)));
     tokio::spawn(consume_reactions(Arc::clone(&td)));
+    tokio::spawn(go_to_goal(Arc::clone(&td)));
+
+    *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, -0.5, 0.0, 0.0, 0.0); // TODO: get me for real
 
     loop {
         node.spin_once(Duration::from_millis(100));
