@@ -77,22 +77,16 @@ sudo make install
 cd ../../../../../
 ```
 
-## Build
+## Test mission_executor
 
 ```sh
 source /usr/lib64/ros2-jazzy/setup.zsh
-colcon build --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-source install/setup.sh
+colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 controller_stonefish mission_executor
+source ./install/setup.sh
+ros2 launch bringup test_mission_executor.launch.py
 ```
 
 ## Topics
 /hydrus/thrusters std_msgs/Float64MultiArray
 /hydrus/odometry  nav_msgs/Odometry
 /hydrus/map       interfaces/Map
-
-## Test
-
-Currently in order to test `mission_planner` we are gonna:
-- `controller_stonefish` for /hydrus/thrusters
-- `controller_stonefish` for /hydrus/odometry
-- `just manualy publish a single Map msg` /hydrus/map Map
