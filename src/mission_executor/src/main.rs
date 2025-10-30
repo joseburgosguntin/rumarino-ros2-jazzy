@@ -118,26 +118,26 @@ async fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
 
 #[tokio::main]
 async fn main() {
-    // TODO: these should be passed in somehow by the controller
-    // let depth_directions = Matrix3x4::new(
-    //     0.000, 0.000, 0.000, 0.000, // dx
-    //     0.000, 0.000, 0.000, 0.000, // dy
-    //     0.999, 0.999, 0.999, 0.999, // dz
+    // let other_directions = Matrix3x4::new(
+    //   0.382, 0.382, -0.382, -0.382,
+    //   -0.923, 0.923, -0.923, 0.000,
+    //   0.000, 0.000, 0.000, 0.000,
     // );
-    // let depth_positions = Matrix3x4::new(
-    //     0.211,  0.211, -0.211, -0.211, // x
-    //     0.169, -0.169,  0.169, -0.169, // y
-    //     0.000,  0.000,  0.000,  0.000, // z
+    // let other_positions = Matrix3x4::new(
+    //   0.198, 0.198, -0.198, -0.198,
+    //   0.407, -0.408, 0.407, -0.408,
+    //   0.000, 0.000, 0.000, 0.000,
     // );
-    // let mut depth_tam = Matrix6x4::<f64>::default();
-    // assert!(depth_tam.ncols() == 4);
-    // assert!(depth_tam.ncols() == depth_positions.ncols());
-    // assert!(depth_tam.ncols() == depth_directions.ncols());
-    // for i in 0..depth_tam.ncols() {
-    //     let position = depth_positions.column(i);
-    //     let direction = depth_directions.column(i);
+    //
+    // let mut other_tam = Matrix6x4::<f64>::default();
+    // assert!(other_tam.ncols() == 4);
+    // assert!(other_tam.ncols() == other_positions.ncols());
+    // assert!(other_tam.ncols() == other_directions.ncols());
+    // for i in 0..other_tam.ncols() {
+    //     let position = other_positions.column(i);
+    //     let direction = other_directions.column(i);
     //     let orthogonal = position.cross(&direction);
-    //     let depth_tam_col = Vector6::new(
+    //     let other_tam_col = Vector6::new(
     //         position[0],
     //         position[1],
     //         position[2],
@@ -145,12 +145,11 @@ async fn main() {
     //         orthogonal[1],
     //         orthogonal[2],
     //     );
-    //     depth_tam.set_column(i, &depth_tam_col);
+    //     other_tam.set_column(i, &other_tam_col);
     // }
-    // r2r::log_info!("mission_executor", "tam = {depth_tam:?}");
-    //   // let wrench = Vector6::new(0.01, 0.01, 1.0, 0.01, 0.01, 0.01);
-    // let depth_tam_svd = depth_tam.svd(true, true);
-
+    // r2r::log_info!("mission_executor", "tam = {other_tam:?}");
+    // let wrench = Vector6::new(0.01, 0.01, 1.0, 0.01, 0.01, 0.01);
+    // let other_tam_svd = other_tam.svd(true, true);
 
     let ctx = r2r::Context::create().expect("Failed to create r2r context!");
     let mut node = Node::create(ctx, "mission_executor", "namespace").expect("Failed to get Node!");
@@ -232,16 +231,19 @@ async fn main() {
             let wrench = kp.component_mul(&pose_err) + ki.component_mul(&sum_err) + kd.component_mul(&vel_err);
             r2r::log_info!("mission_executor", "wrench = {wrench:?}");
 
-            // let values = depth_tam_svd.solve(&wrench, 1e-10).expect("Rank-deficient");
-            // r2r::log_info!("mission_executor", "values = {values:?}");
+            // let other_values = other_tam_svd.solve(&wrench, 1e-10).expect("Rank-deficient");
             let mut thurstor_values = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::zeros();
+            // thurstor_values[0] = other_values[0];
+            // thurstor_values[1] = other_values[1];
+            // thurstor_values[2] = other_values[2];
+            // thurstor_values[3] = other_values[3];
             thurstor_values[4] = wrench.z;
             thurstor_values[5] = wrench.z;
             thurstor_values[6] = wrench.z;
             thurstor_values[7] = wrench.z;
             let minn = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(-5.0);
             let maxx = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(5.0);
-            thurstor_values = thurstor_values.simd_clamp(minn, maxx);
+            thurstor_values = thurstor_values.simd_clamp(minn, maxx) / 5.0;
             r2r::log_info!("mission_executor", "values_norm = {thurstor_values:?}");
 
             let mut thrusters_msg = Float64MultiArray::default();
@@ -275,7 +277,7 @@ async fn main() {
     tokio::spawn(consume_reactions(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
 
-    *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, -0.5, 0.0, 0.0, 0.0); // TODO: get me for real
+    *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, -0.5, 0.0, 1.0, 0.0); // TODO: get me for real
 
     loop {
         node.spin_once(Duration::from_millis(100));
