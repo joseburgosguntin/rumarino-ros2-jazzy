@@ -52,10 +52,7 @@ impl MissionExecutor {
     // maybe this should be done relative to an object
     /// locks goal, blocks until target is reached
     pub async fn move_to(&self, dest: Vector3<f64>) {
-        let mut goal = *self.goal.lock().await;
-        goal[0] = dest[0]; 
-        goal[1] = dest[1]; 
-        goal[2] = dest[2]; 
+        *self.goal.lock().await.xyz() = *dest;
         loop {
             let dist = self.pose.lock().await.pos.metric_distance(&dest);
             if dist < CLOSE_ENOUGH {
