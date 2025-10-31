@@ -13,15 +13,25 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use nalgebra::{ArrayStorage, Matrix3x4, Matrix6x4, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
-use r2r::qos::LivelinessPolicy;
 use r2r::{Node, ParameterValue, QosProfile};
 use tokio::sync::{Mutex, Notify};
-use tokio::sync::mpsc::{Sender, channel};
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Pose {
     pos: Vector3<f64>,
     rot: Quaternion<f64>,
+}
+
+impl From<r2r::geometry_msgs::msg::Pose> for Pose {
+    fn from(value: r2r::geometry_msgs::msg::Pose) -> Self {
+        let p = value.position;
+        let o = value.orientation;
+
+        Self {
+            pos: Vector3::new(p.x, p.y, p.z),
+            rot: Quaternion::new(o.w, o.x, o.y, o.z),
+        }
+    }
 }
 
 struct MissionExecutor {
@@ -64,6 +74,7 @@ impl MissionExecutor {
     }
 }
 
+#[repr(i32)]
 pub enum ObjectCls {
     Cube = 0,
     Rectangle = 1,
@@ -79,58 +90,6 @@ trait Mission: Send + Sync {
 type MapMsg = r2r::interfaces::msg::Map;
 type OdometryMsg = r2r::nav_msgs::msg::Odometry;
 type Float64MultiArray = r2r::std_msgs::msg::Float64MultiArray;
-
-async fn handle_map(td: &MissionExecutor, map: MapMsg) {
-    let mut cached_map = td.cached_map.lock().await;
-    *cached_map = map;
-    let map_objects_count = td.map_objects_count.load(Ordering::Relaxed);
-    let new_objects_count = cached_map.objects.len() - map_objects_count;
-
-    for new_object in &cached_map.objects[map_objects_count..new_objects_count] {
-        let pos = &new_object.bbox.center.position;
-        r2r::log_info!(
-            "mission_executor",
-            "MapObject {} {{ {} {} {} }}",
-            &new_object.cls,
-            &pos.x,
-            &pos.y,
-            &pos.z
-        );
-        let cls = unsafe { std::mem::transmute::<u8, ObjectCls>(new_object.cls as u8) };
-        // if let Some(reaction) = td.mission.object_reactions(cls) {
-        //     reactions_tx.send(reaction).await.unwrap();
-        // }
-    }
-    td.new_objects.notify_one();
-    // td.map_objects_count
-    //     .store(map_objects_count + 1, Ordering::Relaxed);
-}
-
-async fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
-    let p = odometry.pose.pose.position;
-    let o = odometry.pose.pose.orientation;
-
-    r2r::log_info!(
-        "mission_planner",
-        "Odometry {p:?} {o:?}",
-    );
-
-    let mut pose = data.pose.lock().await;
-    pose.pos.x = p.x;
-    pose.pos.y = p.y;
-    pose.pos.z = p.z;
-    pose.rot.w = o.w;
-    pose.rot.i = o.x;
-    pose.rot.j = o.y;
-    pose.rot.k = o.z;
-
-    r2r::log_info!(
-        "mission_planner",
-        "Odometry {:#?} {:#?}",
-        pose.pos,
-        pose.rot
-    );
-}
 
 #[tokio::main]
 async fn main() {
@@ -206,13 +165,14 @@ async fn main() {
 
     let consume_map_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = map_sub.next().await {
-            handle_map(&td, msg).await;
+            *td.cached_map.lock().await = msg;
+            td.new_objects.notify_one();
         }
     };
 
     let consume_odometry_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = odometry_sub.next().await {
-            handle_odometry(&td, msg).await;
+            *td.pose.lock().await = Pose::from(msg.pose.pose);
         }
     };
 
@@ -280,13 +240,14 @@ async fn main() {
         loop {
             td.new_objects.notified().await;
             scout_handle.abort();
-            let map = td.cached_map.lock().await;
             let old_count = td.map_objects_count.load(Ordering::Relaxed);
-            for (i, new_object) in map.objects[old_count..].iter().enumerate() {
-                let cls = unsafe { std::mem::transmute::<u8, ObjectCls>(new_object.cls as u8) };
+            let new_len = td.cached_map.lock().await.objects.len();
+            for i in old_count..new_len {
+                let cls_i32 = td.cached_map.lock().await.objects[i].cls;
+                let cls = unsafe { std::mem::transmute::<i32, ObjectCls>(cls_i32) };
                 td.mission.react_to_object(&td, cls, i).await;
             }
-            td.map_objects_count.store(map.objects.len(), Ordering::Relaxed);
+            td.map_objects_count.store(new_len, Ordering::Relaxed);
             scout_handle = tokio::spawn(scout(Arc::clone(&td)));
         }
     };

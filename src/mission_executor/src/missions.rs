@@ -17,8 +17,6 @@ impl PrecualifyMission {
     //  these functions are expected to take controll and block the
     //  thread until they're done
     async fn go_around(&self, td: &MissionExecutor, idx: usize) {
-        // check if having map lock outside of loop is ok
-        // we might be starving map_sub
         let map = td.cached_map.lock().await;
         let object = &map.objects[idx];
         let object_pos = Vector3::new(
@@ -51,7 +49,7 @@ impl PrecualifyMission {
         let mut starting_i = usize::MAX;
         let initial_sub_pos = td.pose.lock().await.pos;
         for (i, square_corner) in square_corners.iter().enumerate() {
-            let sub_pose = td.pose.lock().await;
+            let sub_pose = *td.pose.lock().await;
             let rot_unit = UnitQuaternion::from_quaternion(object_rot);
             let rel_corner_3d = rot_unit * Vector3::new(square_corner.x, square_corner.y, 0.0);
             let rel_corner = Vector2::new(rel_corner_3d.x, rel_corner_3d.y);
@@ -73,7 +71,7 @@ impl PrecualifyMission {
     }
 
     async fn go_through(&self, td: &MissionExecutor, idx: usize) {
-        let sub_pose = td.pose.lock().await;
+        let sub_pose = *td.pose.lock().await;
         let map = td.cached_map.lock().await;
         let object = &map.objects[idx];
 
