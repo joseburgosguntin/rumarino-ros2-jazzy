@@ -123,7 +123,6 @@ async fn main() {
     //     other_tam.set_column(i, &other_tam_col);
     // }
     // r2r::log_info!("mission_executor", "tam = {other_tam:?}");
-    // let wrench = Vector6::new(0.01, 0.01, 1.0, 0.01, 0.01, 0.01);
     // let other_tam_svd = other_tam.svd(true, true);
 
     let ctx = r2r::Context::create().expect("Failed to create r2r context!");
@@ -176,7 +175,7 @@ async fn main() {
         }
     };
 
-    let kp = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
+    let kp = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 0.5e0;
     let ki = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
     let kd = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
 
@@ -188,20 +187,21 @@ async fn main() {
             let now = Instant::now();
             let dt = now.duration_since(prev_now).as_secs_f64();
 
-            let pose = td.pose.lock().await;
-            r2r::log_info!("mission_executor", "pose = {pose:?}");
-            let goal = td.goal.lock().await;
+            let pose = *td.pose.lock().await;
+            r2r::log_info!("pose", "{pose:?}");
+            let goal = *td.goal.lock().await;
+            r2r::log_info!("goal", "{goal:?}");
             let p = pose.pos;
             let unit = UnitQuaternion::from_quaternion(pose.rot);
             let (roll, pitch, yaw) = unit.euler_angles();
             let current_pose = Vector6::new(p.x, p.y, p.z, roll, pitch, yaw);
 
-            let pose_err = *goal - current_pose;
+            let pose_err = goal - current_pose;
             let vel_err = (pose_err - prev_pose_err) / dt;
             sum_err += pose_err * dt;
 
             let wrench = kp.component_mul(&pose_err) + ki.component_mul(&sum_err) + kd.component_mul(&vel_err);
-            r2r::log_info!("mission_executor", "wrench = {wrench:?}");
+            r2r::log_info!("wrench", "{wrench:?}");
 
             // let other_values = other_tam_svd.solve(&wrench, 1e-10).expect("Rank-deficient");
             let mut thurstor_values = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::zeros();
@@ -209,14 +209,15 @@ async fn main() {
             // thurstor_values[1] = other_values[1];
             // thurstor_values[2] = other_values[2];
             // thurstor_values[3] = other_values[3];
-            thurstor_values[4] = wrench.z;
-            thurstor_values[5] = wrench.z;
-            thurstor_values[6] = wrench.z;
-            thurstor_values[7] = wrench.z;
+            thurstor_values[4] = -wrench.z;
+            thurstor_values[5] = -wrench.z;
+            thurstor_values[6] = -wrench.z;
+            thurstor_values[7] = -wrench.z;
             let minn = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(-5.0);
             let maxx = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(5.0);
+            r2r::log_info!("thurstor_values", "{thurstor_values:?}");
             thurstor_values = thurstor_values.simd_clamp(minn, maxx) / 5.0;
-            r2r::log_info!("mission_executor", "values_norm = {thurstor_values:?}");
+            // r2r::log_info!("mission_executor", "values_norm = {thurstor_values:?}");
 
             let mut thrusters_msg = Float64MultiArray::default();
             thrusters_msg.data.extend(thurstor_values.iter());
@@ -232,7 +233,10 @@ async fn main() {
     };
 
     let scout = |td: Arc<MissionExecutor>| async move {
-        // TODO: do scouting, this code has to have .await's so that abort works
+        loop {
+            // TODO: do scouting, this code has to have .await's so that abort works
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     };
     let mut scout_handle = tokio::spawn(scout(Arc::clone(&td)));
 
@@ -254,10 +258,10 @@ async fn main() {
 
     tokio::spawn(consume_map_sub(Arc::clone(&td)));
     tokio::spawn(consume_odometry_sub(Arc::clone(&td)));
-    tokio::spawn(consume_new_objects(Arc::clone(&td)));
+    // tokio::spawn(consume_new_objects(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
 
-    *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, -0.5, 0.0, 1.0, 0.0); // TODO: get me for real
+    *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, 1.0, 0.0, 0.0, 0.0); // TODO: get me for real
 
     loop {
         node.spin_once(Duration::from_millis(100));
