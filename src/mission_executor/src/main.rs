@@ -15,7 +15,7 @@ use futures::StreamExt;
 use nalgebra::{ArrayStorage, Matrix3x4, Matrix6x4, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
 use r2r::qos::LivelinessPolicy;
 use r2r::{Node, ParameterValue, QosProfile};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use tokio::sync::mpsc::{Sender, channel};
 
 #[derive(Debug)]
@@ -27,10 +27,13 @@ struct Pose {
 struct MissionExecutor {
     pub cached_map: Mutex<MapMsg>,
     pub map_objects_count: AtomicUsize,
+    pub new_objects: Notify,
     pub pose: Mutex<Pose>,
     pub goal: Mutex<Vector6<f64>>,
     pub mission: Box<dyn Mission>,
 }
+
+const CLOSE_ENOUGH: f64 = 0.25;
 
 impl MissionExecutor {
     pub fn new(mission: Box<dyn Mission>) -> Self {
@@ -39,9 +42,27 @@ impl MissionExecutor {
         Self {
             cached_map: Mutex::new(MapMsg::default()),
             map_objects_count: AtomicUsize::new(0),
+            new_objects: Notify::new(),
             pose: Mutex::new(origin),
             goal: Mutex::new(goal),
             mission,
+        }
+    }
+
+    // maybe this should be done relative to an object
+    /// locks goal, blocks until target is reached
+    pub async fn move_to(&self, dest: Vector3<f64>) {
+        let mut goal = *self.goal.lock().await;
+        goal[0] = dest[0]; 
+        goal[1] = dest[1]; 
+        goal[2] = dest[2]; 
+        loop {
+            let dist = self.pose.lock().await.pos.metric_distance(&dest);
+            if dist < CLOSE_ENOUGH {
+                break
+            } else {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
         }
     }
 }
@@ -53,19 +74,16 @@ pub enum ObjectCls {
     Shark = 3,
 }
 
+#[async_trait::async_trait]
 trait Mission: Send + Sync {
-    fn object_reactions(&self, cls: ObjectCls) -> Option<fn(&MissionExecutor) -> ()>;
+    async fn react_to_object(&self, td: &MissionExecutor, cls: ObjectCls, idx: usize);
 }
 
 type MapMsg = r2r::interfaces::msg::Map;
 type OdometryMsg = r2r::nav_msgs::msg::Odometry;
 type Float64MultiArray = r2r::std_msgs::msg::Float64MultiArray;
 
-async fn handle_map(
-    td: &MissionExecutor,
-    map: MapMsg,
-    reactions_tx: &mut Sender<fn(&MissionExecutor) -> ()>,
-) {
+async fn handle_map(td: &MissionExecutor, map: MapMsg) {
     let mut cached_map = td.cached_map.lock().await;
     *cached_map = map;
     let map_objects_count = td.map_objects_count.load(Ordering::Relaxed);
@@ -82,12 +100,13 @@ async fn handle_map(
             &pos.z
         );
         let cls = unsafe { std::mem::transmute::<u8, ObjectCls>(new_object.cls as u8) };
-        if let Some(reaction) = td.mission.object_reactions(cls) {
-            reactions_tx.send(reaction).await.unwrap();
-        }
+        // if let Some(reaction) = td.mission.object_reactions(cls) {
+        //     reactions_tx.send(reaction).await.unwrap();
+        // }
     }
-    td.map_objects_count
-        .store(map_objects_count + 1, Ordering::Relaxed);
+    td.new_objects.notify_one();
+    // td.map_objects_count
+    //     .store(map_objects_count + 1, Ordering::Relaxed);
 }
 
 async fn handle_odometry(data: &MissionExecutor, odometry: OdometryMsg) {
@@ -188,12 +207,9 @@ async fn main() {
         .create_publisher::<Float64MultiArray>("/hydrus/thrusters", QosProfile::default())
         .expect("Failed to setup thruster publisher");
 
-    // TODO: shouldn't this be some sort of priority queue since we wanted to schedule?
-    let (mut reactions_tx, mut reactions_rx) = channel::<fn(&MissionExecutor) -> ()>(16);
-
     let consume_map_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = map_sub.next().await {
-            handle_map(&td, msg, &mut reactions_tx).await;
+            handle_map(&td, msg).await;
         }
     };
 
@@ -215,7 +231,6 @@ async fn main() {
             let now = Instant::now();
             let dt = now.duration_since(prev_now).as_secs_f64();
 
-            // TODO: fix odometry_sub so that we actually get updated position
             let pose = td.pose.lock().await;
             r2r::log_info!("mission_executor", "pose = {pose:?}");
             let goal = td.goal.lock().await;
@@ -264,17 +279,24 @@ async fn main() {
     };
     let mut scout_handle = tokio::spawn(scout(Arc::clone(&td)));
 
-    let consume_reactions = |td: Arc<MissionExecutor>| async move {
-        while let Some(handle_reaction) = reactions_rx.recv().await {
+    let consume_new_objects = |td: Arc<MissionExecutor>| async move {
+        loop {
+            td.new_objects.notified().await;
             scout_handle.abort();
-            handle_reaction(&td);
+            let map = td.cached_map.lock().await;
+            let old_count = td.map_objects_count.load(Ordering::Relaxed);
+            for (i, new_object) in map.objects[old_count..].iter().enumerate() {
+                let cls = unsafe { std::mem::transmute::<u8, ObjectCls>(new_object.cls as u8) };
+                td.mission.react_to_object(&td, cls, i).await;
+            }
+            td.map_objects_count.store(map.objects.len(), Ordering::Relaxed);
             scout_handle = tokio::spawn(scout(Arc::clone(&td)));
         }
     };
 
     tokio::spawn(consume_map_sub(Arc::clone(&td)));
     tokio::spawn(consume_odometry_sub(Arc::clone(&td)));
-    tokio::spawn(consume_reactions(Arc::clone(&td)));
+    tokio::spawn(consume_new_objects(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
 
     *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, -0.5, 0.0, 1.0, 0.0); // TODO: get me for real
