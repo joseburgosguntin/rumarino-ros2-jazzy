@@ -11,10 +11,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use arc_swap::ArcSwap;
 use futures::StreamExt;
-use nalgebra::{ArrayStorage, Matrix3x4, Matrix6x4, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
+use nalgebra::{ArrayStorage, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
 use r2r::{Node, ParameterValue, QosProfile};
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Notify;
 
 #[derive(Clone, Copy, Debug)]
 struct Pose {
@@ -22,10 +23,10 @@ struct Pose {
     rot: Quaternion<f64>,
 }
 
-impl From<r2r::geometry_msgs::msg::Pose> for Pose {
-    fn from(value: r2r::geometry_msgs::msg::Pose) -> Self {
-        let p = value.position;
-        let o = value.orientation;
+impl From<&r2r::geometry_msgs::msg::Pose> for Pose {
+    fn from(value: &r2r::geometry_msgs::msg::Pose) -> Self {
+        let p = &value.position;
+        let o = &value.orientation;
 
         Self {
             pos: Vector3::new(p.x, p.y, p.z),
@@ -35,11 +36,11 @@ impl From<r2r::geometry_msgs::msg::Pose> for Pose {
 }
 
 struct MissionExecutor {
-    pub cached_map: Mutex<MapMsg>,
+    pub map: ArcSwap<MapMsg>,
     pub map_objects_count: AtomicUsize,
     pub new_objects: Notify,
-    pub pose: Mutex<Pose>,
-    pub goal: Mutex<Vector6<f64>>,
+    pub pose: ArcSwap<Pose>,
+    pub goal: ArcSwap<Vector6<f64>>,
     pub mission: Box<dyn Mission>,
 }
 
@@ -50,11 +51,11 @@ impl MissionExecutor {
         let origin = Pose { pos: Vector3::zeros(), rot: Quaternion::new(1.0, 0.0, 0.0, 0.0) };
         let goal = Vector6::zeros();
         Self {
-            cached_map: Mutex::new(MapMsg::default()),
+            map: ArcSwap::new(Arc::new(MapMsg::default())),
             map_objects_count: AtomicUsize::new(0),
             new_objects: Notify::new(),
-            pose: Mutex::new(origin),
-            goal: Mutex::new(goal),
+            pose: ArcSwap::new(Arc::new(origin)),
+            goal: ArcSwap::new(Arc::new(goal)),
             mission,
         }
     }
@@ -62,9 +63,9 @@ impl MissionExecutor {
     // maybe this should be done relative to an object
     /// locks goal, blocks until target is reached
     pub async fn move_to(&self, dest: Vector3<f64>) {
-        *self.goal.lock().await.xyz() = *dest;
+        *self.goal.load().xyz() = *dest;
         loop {
-            let dist = self.pose.lock().await.pos.metric_distance(&dest);
+            let dist = self.pose.load().pos.metric_distance(&dest);
             if dist < CLOSE_ENOUGH {
                 break
             } else {
@@ -82,9 +83,36 @@ pub enum ObjectCls {
     Shark = 3,
 }
 
+pub struct BoundingBox3D {
+    center: Pose,
+    size: Vector3<f64>,
+}
+
+pub struct MapObject {
+    cls: ObjectCls,
+    bbox: BoundingBox3D,
+}
+
+impl From<&r2r::interfaces::msg::MapObject> for MapObject {
+    fn from(value: &r2r::interfaces::msg::MapObject) -> Self {
+        let cls = unsafe { std::mem::transmute::<i32, ObjectCls>(value.cls) };
+        Self {
+            cls,
+            bbox: BoundingBox3D {
+                center: Pose::from(&value.bbox.center),
+                size: Vector3::new(
+                    value.bbox.size.x,
+                    value.bbox.size.y,
+                    value.bbox.size.z,
+                ),
+            },
+        }
+    }
+}
+
 #[async_trait::async_trait]
 trait Mission: Send + Sync {
-    async fn react_to_object(&self, td: &MissionExecutor, cls: ObjectCls, idx: usize);
+    async fn react_to_object(&self, td: &MissionExecutor, idx: usize);
 }
 
 type MapMsg = r2r::interfaces::msg::Map;
@@ -141,6 +169,8 @@ async fn main() {
     };
     drop(params);
 
+    // let (map_tx, mut map_rx) = watch::channel(MapMsg::default());
+    // let td = Arc::new(MissionExecutor::new(mission, map_rx.clone()));
     let td = Arc::new(MissionExecutor::new(mission));
 
     let map_qos = QosProfile::default().keep_last(1).transient_local();
@@ -164,14 +194,13 @@ async fn main() {
 
     let consume_map_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = map_sub.next().await {
-            *td.cached_map.lock().await = msg;
-            td.new_objects.notify_one();
+            td.map.store(Arc::new(msg));
         }
     };
 
     let consume_odometry_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = odometry_sub.next().await {
-            *td.pose.lock().await = Pose::from(msg.pose.pose);
+            td.pose.store(Arc::new(Pose::from(&msg.pose.pose)));
         }
     };
 
@@ -187,9 +216,9 @@ async fn main() {
             let now = Instant::now();
             let dt = now.duration_since(prev_now).as_secs_f64();
 
-            let pose = *td.pose.lock().await;
+            let pose = **td.pose.load();
             r2r::log_info!("pose", "{pose:?}");
-            let goal = *td.goal.lock().await;
+            let goal = **td.goal.load();
             r2r::log_info!("goal", "{goal:?}");
             let p = pose.pos;
             let unit = UnitQuaternion::from_quaternion(pose.rot);
@@ -245,11 +274,9 @@ async fn main() {
             td.new_objects.notified().await;
             scout_handle.abort();
             let old_count = td.map_objects_count.load(Ordering::Relaxed);
-            let new_len = td.cached_map.lock().await.objects.len();
+            let new_len = td.map.load().objects.len();
             for i in old_count..new_len {
-                let cls_i32 = td.cached_map.lock().await.objects[i].cls;
-                let cls = unsafe { std::mem::transmute::<i32, ObjectCls>(cls_i32) };
-                td.mission.react_to_object(&td, cls, i).await;
+                td.mission.react_to_object(&td, i).await;
             }
             td.map_objects_count.store(new_len, Ordering::Relaxed);
             scout_handle = tokio::spawn(scout(Arc::clone(&td)));
@@ -261,7 +288,8 @@ async fn main() {
     // tokio::spawn(consume_new_objects(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
 
-    *td.goal.lock().await = Vector6::<f64>::new(0.0, 0.0, 1.0, 0.0, 0.0, 0.0); // TODO: get me for real
+    // TODO make depth work while tam is also existing
+    td.goal.store(Arc::new(Vector6::<f64>::new(0.0, 0.0, 1.0, 0.0, 0.0, 0.0))); // TODO: get me for real
 
     loop {
         node.spin_once(Duration::from_millis(100));
