@@ -77,7 +77,7 @@ sudo make install
 cd ../../../../../
 ```
 
-## Test mission_executor
+## Test mission\_executor
 
 ```sh
 source /usr/lib64/ros2-jazzy/setup.zsh
@@ -85,6 +85,28 @@ colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 contr
 source ./install/setup.sh
 ros2 launch bringup test_mission_executor.launch.py
 ```
+
+To test individually each component (to debug mission-executor), instead of bringup do:
+```sh
+ros2 launch controller_stonefish hydrussim.launch.py
+```
+
+In another terminal:
+```sh
+ros2 run bringup oneshot_map_node
+```
+
+And launch the mission\_executor. To simply execute it:
+```sh
+ros2 run mission_executor mission_executor --ros-args -p "mission_name:=prequalify"
+```
+
+To debug the binary in gdb:
+```sh
+gdb --args ./target/debug/mission_executor --ros-args -p mission_name:=prequalify
+```
+
+You can also run the Debug target in VS code for the same effect.
 
 ## Topics
 /hydrus/thrusters std_msgs/Float64MultiArray
