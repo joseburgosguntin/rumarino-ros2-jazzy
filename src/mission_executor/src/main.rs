@@ -37,7 +37,7 @@ impl From<&r2r::geometry_msgs::msg::Pose> for Pose {
 
 struct MissionExecutor {
     pub map: ArcSwap<MapMsg>,
-    pub map_objects_count: AtomicUsize,
+    pub map_objects_reacted: AtomicUsize,
     pub new_objects: Notify,
     pub pose: ArcSwap<Pose>,
     pub goal: ArcSwap<Vector6<f64>>,
@@ -52,7 +52,7 @@ impl MissionExecutor {
         let goal = Vector6::zeros();
         Self {
             map: ArcSwap::new(Arc::new(MapMsg::default())),
-            map_objects_count: AtomicUsize::new(0),
+            map_objects_reacted: AtomicUsize::new(0),
             new_objects: Notify::new(),
             pose: ArcSwap::new(Arc::new(origin)),
             goal: ArcSwap::new(Arc::new(goal)),
@@ -263,12 +263,18 @@ async fn main() {
         loop {
             td.new_objects.notified().await;
             scout_handle.abort();
-            let old_count = td.map_objects_count.load(Ordering::Relaxed);
-            let new_len = td.map.load().objects.len();
-            for i in old_count..new_len {
-                td.mission.react_to_object(&td, i);
+            let mut reacted = td.map_objects_reacted.load(Ordering::Relaxed);
+            loop {
+                let objects_len = td.map.load().objects.len();
+                if reacted == objects_len { 
+                    break;
+                }
+                while reacted < objects_len {
+                    td.mission.react_to_object(&td, reacted);
+                    reacted += 1;
+                }
             }
-            td.map_objects_count.store(new_len, Ordering::Relaxed);
+            td.map_objects_reacted.store(reacted, Ordering::Relaxed);
             scout_handle = tokio::spawn(scout(Arc::clone(&td)));
         }
     };
