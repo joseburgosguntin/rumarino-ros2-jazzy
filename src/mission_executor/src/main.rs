@@ -62,14 +62,15 @@ impl MissionExecutor {
 
     // maybe this should be done relative to an object
     /// locks goal, blocks until target is reached
-    pub async fn move_to(&self, dest: Vector3<f64>) {
+    pub fn move_to(&self, dest: Vector3<f64>) {
         *self.goal.load().xyz() = *dest;
         loop {
             let dist = self.pose.load().pos.metric_distance(&dest);
             if dist < CLOSE_ENOUGH {
                 break
             } else {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                std::thread::sleep(Duration::from_millis(100));
+                // tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
     }
@@ -110,9 +111,9 @@ impl From<&r2r::interfaces::msg::MapObject> for MapObject {
     }
 }
 
-#[async_trait::async_trait]
+// #[async_trait::async_trait]
 trait Mission: Send + Sync {
-    async fn react_to_object(&self, td: &MissionExecutor, idx: usize);
+    fn react_to_object(&self, td: &MissionExecutor, idx: usize);
 }
 
 type MapMsg = r2r::interfaces::msg::Map;
@@ -276,7 +277,7 @@ async fn main() {
             let old_count = td.map_objects_count.load(Ordering::Relaxed);
             let new_len = td.map.load().objects.len();
             for i in old_count..new_len {
-                td.mission.react_to_object(&td, i).await;
+                td.mission.react_to_object(&td, i);
             }
             td.map_objects_count.store(new_len, Ordering::Relaxed);
             scout_handle = tokio::spawn(scout(Arc::clone(&td)));

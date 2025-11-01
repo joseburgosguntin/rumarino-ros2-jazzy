@@ -16,7 +16,7 @@ impl PrecualifyMission {
     // TODO: these function are gonna need fuctions like: [move_to, look_at]
     //  these functions are expected to take controll and block the
     //  thread until they're done
-    async fn go_around(&self, td: &MissionExecutor, idx: usize) {
+    fn go_around(&self, td: &MissionExecutor, idx: usize) {
         let object = MapObject::from(&td.map.load().objects[idx]);
         let object_pos = object.bbox.center.pos;
         let object_rot = object.bbox.center.rot;
@@ -55,12 +55,12 @@ impl PrecualifyMission {
         }
 
         for i in 0..corner_pluss.len() {
-            td.move_to(corner_pluss[starting_i + i % corner_pluss.len()]).await;
+            td.move_to(corner_pluss[starting_i + i % corner_pluss.len()]);
         }
-        td.move_to(initial_sub_pos).await;
+        td.move_to(initial_sub_pos);
     }
 
-    async fn go_through(&self, td: &MissionExecutor, idx: usize) {
+    fn go_through(&self, td: &MissionExecutor, idx: usize) {
         let sub_pose = td.pose.load();
         let object = MapObject::from(&td.map.load().objects[idx]);
 
@@ -73,22 +73,21 @@ impl PrecualifyMission {
         let before_2d = object_pos_2d - direction_2d * FAR_ENOUGH;
         let before = Vector3::new(before_2d.x, before_2d.y, object_pos.z);
 
-        td.move_to(before).await;
+        td.move_to(before);
 
         let overshoot_2d = object_pos_2d + direction_2d * OVERSHOOT;
         let overshoot = Vector3::new(overshoot_2d.x, overshoot_2d.y, object_pos.z);
 
-        td.move_to(overshoot).await;
+        td.move_to(overshoot);
     }
 }
 
-#[async_trait::async_trait]
 impl Mission for PrecualifyMission {
-    async fn react_to_object(&self, td: &MissionExecutor, idx: usize) {
+    fn react_to_object(&self, td: &MissionExecutor, idx: usize) {
         let object = MapObject::from(&td.map.load().objects[idx]);
         match object.cls {
-            ObjectCls::Rectangle | ObjectCls::Cube => self.go_around(td, idx).await,
-            ObjectCls::Gate => self.go_through(td, idx).await,
+            ObjectCls::Rectangle | ObjectCls::Cube => self.go_around(td, idx),
+            ObjectCls::Gate => self.go_through(td, idx),
             ObjectCls::Shark => (),
         }
     }
