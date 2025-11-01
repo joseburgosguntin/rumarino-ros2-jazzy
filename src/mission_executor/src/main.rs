@@ -185,6 +185,7 @@ async fn main() {
     let consume_map_sub = |td: Arc<MissionExecutor>| async move {
         while let Some(msg) = map_sub.next().await {
             td.map.store(Arc::new(msg));
+            td.new_objects.notify_one();
         }
     };
 
