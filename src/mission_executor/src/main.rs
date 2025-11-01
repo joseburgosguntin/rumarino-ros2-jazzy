@@ -61,7 +61,7 @@ impl MissionExecutor {
     }
 
     // maybe this should be done relative to an object
-    /// locks goal, blocks until target is reached
+    /// blocks until `dest` is reached within `CLOSE_ENOUGH` distance
     pub fn move_to(&self, dest: Vector3<f64>) {
         *self.goal.load().xyz() = *dest;
         loop {
@@ -70,7 +70,6 @@ impl MissionExecutor {
                 break
             } else {
                 std::thread::sleep(Duration::from_millis(100));
-                // tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
     }
@@ -170,22 +169,12 @@ async fn main() {
     };
     drop(params);
 
-    // let (map_tx, mut map_rx) = watch::channel(MapMsg::default());
-    // let td = Arc::new(MissionExecutor::new(mission, map_rx.clone()));
     let td = Arc::new(MissionExecutor::new(mission));
 
     let map_qos = QosProfile::default().keep_last(1).transient_local();
     let mut map_sub = node
         .subscribe::<MapMsg>("/hydrus/map", map_qos)
         .expect("Failed to subscribe to map");
-// QoS profile:
-//   Reliability: RELIABLE
-//   History (Depth): UNKNOWN
-//   Durability: VOLATILE
-//   Lifespan: Infinite
-//   Deadline: Infinite
-//   Liveliness: AUTOMATIC
-//   Liveliness lease duration: Infinite
     let mut odometry_sub = node
         .subscribe::<OdometryMsg>("/hydrus/odometry", QosProfile::default())
         .expect("Failed to subscribe to odometry");
@@ -247,7 +236,6 @@ async fn main() {
             let maxx = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(5.0);
             r2r::log_info!("thurstor_values", "{thurstor_values:?}");
             thurstor_values = thurstor_values.simd_clamp(minn, maxx) / 5.0;
-            // r2r::log_info!("mission_executor", "values_norm = {thurstor_values:?}");
 
             let mut thrusters_msg = Float64MultiArray::default();
             thrusters_msg.data.extend(thurstor_values.iter());

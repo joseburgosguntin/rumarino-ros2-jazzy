@@ -13,9 +13,7 @@ impl PrecualifyMission {
     pub(crate) fn new() -> Self {
         Self {}
     }
-    // TODO: these function are gonna need fuctions like: [move_to, look_at]
-    //  these functions are expected to take controll and block the
-    //  thread until they're done
+
     fn go_around(&self, td: &MissionExecutor, idx: usize) {
         let object = MapObject::from(&td.map.load().objects[idx]);
         let object_pos = object.bbox.center.pos;
