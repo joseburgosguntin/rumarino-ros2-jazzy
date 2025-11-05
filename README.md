@@ -83,7 +83,7 @@ cd ../../../../../
 source /usr/lib64/ros2-jazzy/setup.zsh
 colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 controller_stonefish mission_executor
 source ./install/setup.sh
-ros2 launch bringup test_mission_executor.launch.py
+ros2 launch bringup test_mission_executor.launch.py mission_name:=prequalify env_file_name:=prequalify_env.scn
 ```
 
 To test individually each component (to debug mission-executor), instead of bringup do:
