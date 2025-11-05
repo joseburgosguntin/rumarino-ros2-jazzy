@@ -195,9 +195,9 @@ async fn main() {
         }
     };
 
-    let kp = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 0.5e0;
-    let ki = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
-    let kd = Vector6::<f64>::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0) / 1e0;
+    let kp = Vector6::new(3.50, 3.50, 2.20, 2.40, 2.40, 2.20);
+    let ki = Vector6::new(0.10, 0.10, 0.05, 0.05, 0.05, 0.01);
+    let kd = Vector6::new(0.70, 0.90, 0.40, 0.20, 0.20, 0.80);
 
     let go_to_goal = |td: Arc<MissionExecutor>| async move {
         let mut sum_err = Vector6::zeros();
@@ -214,6 +214,7 @@ async fn main() {
             let p = pose.pos;
             let unit = UnitQuaternion::from_quaternion(pose.rot);
             let (roll, pitch, yaw) = unit.euler_angles();
+            r2r::log_info!("rpy", "({roll}, {pitch}, {yaw})");
             let current_pose = Vector6::new(p.x, p.y, p.z, roll, pitch, yaw);
 
             let pose_err = goal - current_pose;
@@ -225,14 +226,25 @@ async fn main() {
 
             // let other_values = other_tam_svd.solve(&wrench, 1e-10).expect("Rank-deficient");
             let mut thurstor_values = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::zeros();
-            // thurstor_values[0] = other_values[0];
-            // thurstor_values[1] = other_values[1];
-            // thurstor_values[2] = other_values[2];
-            // thurstor_values[3] = other_values[3];
-            thurstor_values[4] = -wrench.z;
-            thurstor_values[5] = -wrench.z;
-            thurstor_values[6] = -wrench.z;
-            thurstor_values[7] = -wrench.z;
+
+            let unit_2 = UnitQuaternion::from_euler_angles(0.0, 0.0, -yaw + std::f64::consts::PI);
+            let rotated = unit_2 * wrench.xyz();
+            let xy_error = wrench.xy().norm();
+            // only apply yaw when close
+            let yaw_scale = if xy_error < 0.5 { 1.0 } else { 0.0 };
+
+            // yaw, x, y
+            thurstor_values[0] =  yaw_scale * wrench[5] - rotated.x - rotated.y; // ++
+            thurstor_values[1] = -yaw_scale * wrench[5] + rotated.x - rotated.y; // +-
+            thurstor_values[2] = -yaw_scale * wrench[5] - rotated.x + rotated.y; // -+
+            thurstor_values[3] =  yaw_scale * wrench[5] + rotated.x + rotated.y; // --
+            
+            // z, roll, pitch
+            thurstor_values[4] = -wrench.z + wrench[4] + wrench[3];
+            thurstor_values[5] = -wrench.z - wrench[4] + wrench[3];
+            thurstor_values[6] = -wrench.z + wrench[4] - wrench[3];
+            thurstor_values[7] = -wrench.z - wrench[4] - wrench[3];
+
             let minn = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(-5.0);
             let maxx = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(5.0);
             r2r::log_info!("thurstor_values", "{thurstor_values:?}");
@@ -284,8 +296,7 @@ async fn main() {
     // tokio::spawn(consume_new_objects(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
 
-    // TODO make depth work while tam is also existing
-    td.goal.store(Arc::new(Vector6::<f64>::new(0.0, 0.0, 1.0, 0.0, 0.0, 0.0))); // TODO: get me for real
+    td.goal.store(Arc::new(Vector6::<f64>::new(-5.0, 5.5, 1.0, 0.0, 0.0, 1.5708))); // TODO: get me for real
 
     loop {
         node.spin_once(Duration::from_millis(100));
