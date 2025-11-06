@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use futures::StreamExt;
-use nalgebra::{ArrayStorage, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
+use nalgebra::{ArrayStorage, Matrix4x3, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
+type Vector8<T> = Vector<T, U8, ArrayStorage<T, 8, 1>>;
 use r2r::{Node, ParameterValue, QosProfile};
 use tokio::sync::Notify;
 
@@ -121,38 +122,6 @@ type Float64MultiArray = r2r::std_msgs::msg::Float64MultiArray;
 
 #[tokio::main]
 async fn main() {
-    // let other_directions = Matrix3x4::new(
-    //   0.382, 0.382, -0.382, -0.382,
-    //   -0.923, 0.923, -0.923, 0.000,
-    //   0.000, 0.000, 0.000, 0.000,
-    // );
-    // let other_positions = Matrix3x4::new(
-    //   0.198, 0.198, -0.198, -0.198,
-    //   0.407, -0.408, 0.407, -0.408,
-    //   0.000, 0.000, 0.000, 0.000,
-    // );
-    //
-    // let mut other_tam = Matrix6x4::<f64>::default();
-    // assert!(other_tam.ncols() == 4);
-    // assert!(other_tam.ncols() == other_positions.ncols());
-    // assert!(other_tam.ncols() == other_directions.ncols());
-    // for i in 0..other_tam.ncols() {
-    //     let position = other_positions.column(i);
-    //     let direction = other_directions.column(i);
-    //     let orthogonal = position.cross(&direction);
-    //     let other_tam_col = Vector6::new(
-    //         position[0],
-    //         position[1],
-    //         position[2],
-    //         orthogonal[0],
-    //         orthogonal[1],
-    //         orthogonal[2],
-    //     );
-    //     other_tam.set_column(i, &other_tam_col);
-    // }
-    // r2r::log_info!("mission_executor", "tam = {other_tam:?}");
-    // let other_tam_svd = other_tam.svd(true, true);
-
     let ctx = r2r::Context::create().expect("Failed to create r2r context!");
     let mut node = Node::create(ctx, "mission_executor", "namespace").expect("Failed to get Node!");
     let params = node.params.lock().unwrap();
@@ -195,9 +164,25 @@ async fn main() {
         }
     };
 
-    let kp = Vector6::new(3.50, 3.50, 2.20, 2.40, 2.40, 2.20);
-    let ki = Vector6::new(0.10, 0.10, 0.05, 0.05, 0.05, 0.01);
-    let kd = Vector6::new(0.70, 0.90, 0.40, 0.20, 0.20, 0.80);
+    const KP: Vector6<f64> = Vector6::new(3.50, 3.50, 2.20, 2.40, 2.40, 2.20);
+    const KI: Vector6<f64> = Vector6::new(0.10, 0.10, 0.05, 0.05, 0.05, 0.01);
+    const KD: Vector6<f64> = Vector6::new(0.70, 0.90, 0.40, 0.20, 0.20, 0.80);
+
+    const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
+        -1.0, -1.0,  1.0,
+         1.0, -1.0, -1.0,
+        -1.0,  1.0, -1.0,
+         1.0,  1.0,  1.0,
+    );
+
+    const TAM_Z_ROLL_PITCH: Matrix4x3<f64> = Matrix4x3::new(
+        -1.0,  1.0,  1.0,
+        -1.0,  1.0, -1.0,
+        -1.0, -1.0,  1.0,
+        -1.0, -1.0, -1.0,
+    );
+
+    const THRUSTOR_SATURATE: f64 = 5.0;
 
     let go_to_goal = |td: Arc<MissionExecutor>| async move {
         let mut sum_err = Vector6::zeros();
@@ -208,47 +193,41 @@ async fn main() {
             let dt = now.duration_since(prev_now).as_secs_f64();
 
             let pose = **td.pose.load();
-            r2r::log_info!("pose", "{pose:?}");
             let goal = **td.goal.load();
-            r2r::log_info!("goal", "{goal:?}");
             let p = pose.pos;
             let unit = UnitQuaternion::from_quaternion(pose.rot);
             let (roll, pitch, yaw) = unit.euler_angles();
-            r2r::log_info!("rpy", "({roll}, {pitch}, {yaw})");
             let current_pose = Vector6::new(p.x, p.y, p.z, roll, pitch, yaw);
+
+            r2r::log_info!("goal", "{goal:?}");
+            r2r::log_info!("pose", "{current_pose:?}");
 
             let pose_err = goal - current_pose;
             let vel_err = (pose_err - prev_pose_err) / dt;
             sum_err += pose_err * dt;
 
-            let wrench = kp.component_mul(&pose_err) + ki.component_mul(&sum_err) + kd.component_mul(&vel_err);
-            r2r::log_info!("wrench", "{wrench:?}");
-
-            // let other_values = other_tam_svd.solve(&wrench, 1e-10).expect("Rank-deficient");
-            let mut thurstor_values = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::zeros();
+            let wrench = KP.component_mul(&pose_err) + KI.component_mul(&sum_err) + KD.component_mul(&vel_err);
 
             let unit_2 = UnitQuaternion::from_euler_angles(0.0, 0.0, -yaw + std::f64::consts::PI);
             let rotated = unit_2 * wrench.xyz();
             let xy_error = wrench.xy().norm();
             // only apply yaw when close
             let yaw_scale = if xy_error < 0.5 { 1.0 } else { 0.0 };
+            let input_x_y_yaw = Vector3::new(rotated.x, rotated.y, wrench[5] * yaw_scale);
+            let input_z_roll_pitch = Vector3::new(wrench.z, wrench[3], wrench[4]);
 
-            // yaw, x, y
-            thurstor_values[0] =  yaw_scale * wrench[5] - rotated.x - rotated.y; // ++
-            thurstor_values[1] = -yaw_scale * wrench[5] + rotated.x - rotated.y; // +-
-            thurstor_values[2] = -yaw_scale * wrench[5] - rotated.x + rotated.y; // -+
-            thurstor_values[3] =  yaw_scale * wrench[5] + rotated.x + rotated.y; // --
-            
-            // z, roll, pitch
-            thurstor_values[4] = -wrench.z + wrench[4] + wrench[3];
-            thurstor_values[5] = -wrench.z - wrench[4] + wrench[3];
-            thurstor_values[6] = -wrench.z + wrench[4] - wrench[3];
-            thurstor_values[7] = -wrench.z - wrench[4] - wrench[3];
+            r2r::log_info!("wrench", "{wrench:?}");
+            r2r::log_info!("rotated", "{rotated:?}");
 
-            let minn = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(-5.0);
-            let maxx = Vector::<f64, U8, ArrayStorage<f64, 8, 1>>::repeat(5.0);
+            let mut thurstor_values = Vector8::zeros();
+            thurstor_values.fixed_rows_mut::<4>(0).copy_from(&(TAM_X_Y_YAW * input_x_y_yaw));
+            thurstor_values.fixed_rows_mut::<4>(4).copy_from(&(TAM_Z_ROLL_PITCH * input_z_roll_pitch));
+
             r2r::log_info!("thurstor_values", "{thurstor_values:?}");
-            thurstor_values = thurstor_values.simd_clamp(minn, maxx) / 5.0;
+
+            let minn = Vector8::repeat(-THRUSTOR_SATURATE);
+            let maxx = Vector8::repeat(THRUSTOR_SATURATE);
+            thurstor_values = thurstor_values.simd_clamp(minn, maxx) / THRUSTOR_SATURATE;
 
             let mut thrusters_msg = Float64MultiArray::default();
             thrusters_msg.data.extend(thurstor_values.iter());
