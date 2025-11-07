@@ -33,19 +33,22 @@ class OneshotMap(Node):
         msg = Map()
 
         # map bounds
+        # All values need to be explicitly set as floats, otherwise 
+        # an int ends up being parsed as a float in the mission 
+        # executor. That is very bad.
         msg.map_bounds = make_bbox(
-            center_pos={"x": 0, "y": 0, "z": 0},
-            center_ori={"w": 1, "x": 0, "y": 0, "z": 0},
-            size_xyz={"x": 1000, "y": 1000, "z": 3},
+            center_pos={"x": 0.0, "y": 0.0, "z": 0.0},
+            center_ori={"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0},
+            size_xyz={"x": 1000.0, "y": 1000.0, "z": 3.0},
         )
 
         # objects (e.g., one gate)
         gate = MapObject()
         gate.cls = 2
         gate.bbox = make_bbox(
-            center_pos={"x": 0, "y": 1.5, "z": 3},
-            center_ori={"w": 1, "x": 0, "y": 0, "z": 0},
-            size_xyz={"x": 0.04, "y": 3 + (2 * 0.04), "z": 4},
+            center_pos={"x": 0.0, "y": 0.0, "z": 3.0},
+            center_ori={"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0},
+            size_xyz={"x": 0.04, "y": 3 + (2 * 0.04), "z": 4.0},
         )
         msg.objects.append(gate)
 
