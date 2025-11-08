@@ -9,7 +9,8 @@
             "args": [
              "--ros-args",
              "-p",
-            "mission_name:=prequalify"
+            "mission_name:=prequalify",
+            "env_file_name:=hydrus_env.scn"
             ],
             "cwd": "${fileDirname}"
         }
