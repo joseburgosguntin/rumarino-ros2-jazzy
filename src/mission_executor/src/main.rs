@@ -45,7 +45,7 @@ struct MissionExecutor {
     pub mission: Box<dyn Mission>,
 }
 
-const CLOSE_ENOUGH: f64 = 0.25;
+const CLOSE_ENOUGH: f64 = 1.0;
 
 impl MissionExecutor {
     pub fn new(mission: Box<dyn Mission>) -> Self {
@@ -64,9 +64,16 @@ impl MissionExecutor {
     // maybe this should be done relative to an object
     /// blocks until `dest` is reached within `CLOSE_ENOUGH` distance
     pub fn move_to(&self, dest: Vector3<f64>) {
-        *self.goal.load().xyz() = *dest;
+        let mut old_goal = **self.goal.load();
+        old_goal.x = dest.x;
+        old_goal.y = dest.y;
+        old_goal.z = dest.z;
+        self.goal.store(Arc::new(old_goal));
         loop {
-            let dist = self.pose.load().pos.metric_distance(&dest);
+            let pose = self.pose.load();
+            let goal = self.goal.load();
+            let dist = pose.pos.metric_distance(&dest);
+            r2r::log_info!("dist", "{dist}, pose: {pose:?}, goal: {goal:?}");
             if dist < CLOSE_ENOUGH {
                 break
             } else {
@@ -117,6 +124,10 @@ trait Mission: Send + Sync {
 }
 
 type MapMsg = r2r::interfaces::msg::Map;
+type MapObjectMsg = r2r::interfaces::msg::MapObject;
+type PointMsg = r2r::geometry_msgs::msg::Point;
+type QuaternionMsg = r2r::geometry_msgs::msg::Quaternion;
+type Vector3Msg = r2r::geometry_msgs::msg::Vector3;
 type OdometryMsg = r2r::nav_msgs::msg::Odometry;
 type Float64MultiArray = r2r::std_msgs::msg::Float64MultiArray;
 
@@ -168,17 +179,39 @@ async fn main() {
     const KI: Vector6<f64> = Vector6::new(0.10, 0.10, 0.05, 0.05, 0.05, 0.01);
     const KD: Vector6<f64> = Vector6::new(0.70, 0.90, 0.40, 0.20, 0.20, 0.80);
 
+    // const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
+    //     -1.0, -1.0,  1.0,
+    //      1.0, -1.0, -1.0,
+    //     -1.0,  1.0, -1.0,
+    //      1.0,  1.0,  1.0,
+    // );
+
     const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
         -1.0, -1.0,  1.0,
-         1.0, -1.0, -1.0,
         -1.0,  1.0, -1.0,
+         1.0, -1.0, -1.0,
          1.0,  1.0,  1.0,
     );
 
+
+    // const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
+    //     -1.0, -1.0,  1.0,
+    //      1.0,  1.0,  1.0,
+    //     -1.0,  1.0, -1.0,
+    //      1.0, -1.0, -1.0,
+    // );
+
+    // const TAM_Z_ROLL_PITCH: Matrix4x3<f64> = Matrix4x3::new(
+    //     -1.0,  1.0,  1.0,
+    //     -1.0,  1.0, -1.0,
+    //     -1.0, -1.0,  1.0,
+    //     -1.0, -1.0, -1.0,
+    // );
+
     const TAM_Z_ROLL_PITCH: Matrix4x3<f64> = Matrix4x3::new(
         -1.0,  1.0,  1.0,
-        -1.0,  1.0, -1.0,
         -1.0, -1.0,  1.0,
+        -1.0,  1.0, -1.0,
         -1.0, -1.0, -1.0,
     );
 
@@ -199,31 +232,31 @@ async fn main() {
             let (roll, pitch, yaw) = unit.euler_angles();
             let current_pose = Vector6::new(p.x, p.y, p.z, roll, pitch, yaw);
 
-            r2r::log_info!("goal", "{goal:?}");
-            r2r::log_info!("pose", "{current_pose:?}");
+            // r2r::log_info!("goal", "{goal:?}");
+            // r2r::log_info!("pose", "{current_pose:?}");
 
             let pose_err = goal - current_pose;
             let vel_err = (pose_err - prev_pose_err) / dt;
             sum_err += pose_err * dt;
 
-            let wrench = KP.component_mul(&pose_err) + KI.component_mul(&sum_err) + KD.component_mul(&vel_err);
+            let mut wrench = KP.component_mul(&pose_err) + KI.component_mul(&sum_err) + KD.component_mul(&vel_err);
 
-            let unit_2 = UnitQuaternion::from_euler_angles(0.0, 0.0, -yaw + std::f64::consts::PI);
+            let unit_2 = UnitQuaternion::from_euler_angles(0.0, 0.0, -yaw);
             let rotated = unit_2 * wrench.xyz();
             let xy_error = wrench.xy().norm();
             // only apply yaw when close
             let yaw_scale = if xy_error < 0.5 { 1.0 } else { 0.0 };
-            let input_x_y_yaw = Vector3::new(rotated.x, rotated.y, wrench[5] * yaw_scale);
-            let input_z_roll_pitch = Vector3::new(wrench.z, wrench[3], wrench[4]);
+            let input_x_y_yaw = Vector3::new(1.0 * rotated.x, -1.0 * rotated.y, wrench[5] * yaw_scale);
+            let input_z_roll_pitch = Vector3::new(wrench.z, -wrench[3], wrench[4]);
 
-            r2r::log_info!("wrench", "{wrench:?}");
-            r2r::log_info!("rotated", "{rotated:?}");
+            // r2r::log_info!("wrench", "{wrench:?}");
+            // r2r::log_info!("rotated", "{rotated:?}");
 
             let mut thurstor_values = Vector8::zeros();
             thurstor_values.fixed_rows_mut::<4>(0).copy_from(&(TAM_X_Y_YAW * input_x_y_yaw));
             thurstor_values.fixed_rows_mut::<4>(4).copy_from(&(TAM_Z_ROLL_PITCH * input_z_roll_pitch));
 
-            r2r::log_info!("thurstor_values", "{thurstor_values:?}");
+            // r2r::log_info!("thurstor_values", "{thurstor_values:?}");
 
             let minn = Vector8::repeat(-THRUSTOR_SATURATE);
             let maxx = Vector8::repeat(THRUSTOR_SATURATE);
@@ -261,7 +294,9 @@ async fn main() {
                     break;
                 }
                 while reacted < objects_len {
+                    r2r::log_info!("reacting...", "{reacted}");
                     td.mission.react_to_object(&td, reacted);
+                    r2r::log_info!("reacted", "{reacted}");
                     reacted += 1;
                 }
             }
@@ -270,12 +305,56 @@ async fn main() {
         }
     };
 
-    tokio::spawn(consume_map_sub(Arc::clone(&td)));
+    // tokio::spawn(consume_map_sub(Arc::clone(&td)));
     tokio::spawn(consume_odometry_sub(Arc::clone(&td)));
-    // tokio::spawn(consume_new_objects(Arc::clone(&td)));
+    tokio::spawn(consume_new_objects(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
 
-    td.goal.store(Arc::new(Vector6::<f64>::new(-5.0, 5.5, 1.0, 0.0, 0.0, 1.5708))); // TODO: get me for real
+    // td.goal.store(Arc::new(Vector6::<f64>::new(-5.0, 5.5, 1.0, 0.0, 0.0, 1.5708))); // TODO: get me for real
+
+    // FIX: in simulator we say hes there, so this is to keep him still until it reacts
+    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 0.5, 1.0, 0.0, 0.0, 0.0)));
+    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 0.5, 1.0, 0.0, 0.0, 1.5708)));
+    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 0.5, 1.0, 0.0, 0.0, 0.0)));
+    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 10.0, 1.0, 0.0, 0.0, 0.0)));
+
+
+    td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 1.0, 1.0, 0.0, 0.0, 0.0)));
+
+    // let mut map_msg = MapMsg::default();
+    // let mut map_object_msg = MapObjectMsg::default();
+    // map_object_msg.cls = ObjectCls::Gate as i32;
+    // map_object_msg.bbox.center.position = PointMsg {x: 0.0, y: 1.5, z: 2.0};
+    // map_object_msg.bbox.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
+    // map_object_msg.bbox.size = Vector3Msg {x: 0.04, y: 3.0 + (2.0 * 0.04), z: 4.0};
+    // map_msg.objects.push(map_object_msg);
+    // td.map.store(Arc::new(map_msg));
+    // td.new_objects.notify_one();
+
+
+    let mut map_msg = MapMsg::default();
+
+    map_msg.map_bounds.center.position = PointMsg {x: 0.0, y: 1.5, z: 2.0};
+    map_msg.map_bounds.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
+    map_msg.map_bounds.size = Vector3Msg { x: 1000.0, y: 1000.0, z: 3.0 };
+
+    let mut gate_object_msg = MapObjectMsg::default();
+    gate_object_msg.cls = ObjectCls::Gate as i32;
+    gate_object_msg.bbox.center.position = PointMsg {x: 0.0, y: 1.5, z: 2.0};
+    gate_object_msg.bbox.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
+    gate_object_msg.bbox.size = Vector3Msg {x: 0.04, y: 3.0 + (2.0 * 0.04), z: 4.0};
+
+    let mut cube_object_msg = MapObjectMsg::default();
+    cube_object_msg.cls = ObjectCls::Cube as i32;
+    cube_object_msg.bbox.center.position = PointMsg {x: 10.0, y: 1.0, z: 2.0};
+    cube_object_msg.bbox.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
+    cube_object_msg.bbox.size = Vector3Msg {x: 0.2, y: 0.2, z: 4.0};
+
+    map_msg.objects.push(gate_object_msg);
+    map_msg.objects.push(cube_object_msg);
+
+    td.map.store(Arc::new(map_msg));
+    td.new_objects.notify_one();
 
     loop {
         node.spin_once(Duration::from_millis(100));

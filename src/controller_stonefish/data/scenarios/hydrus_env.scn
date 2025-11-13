@@ -92,7 +92,7 @@
 	<!-- Single Hydrus AUV instance -->
 	<include file="scenarios/hydrus_auv.scn">
 		<arg name="robot_name" value="HydrusAUV" />
-		<arg name="robot_rpy" value="0.0 0.0 1.5708" />
-		<arg name="robot_position" value="-3.0 0.5 0.0" />
+		<arg name="robot_rpy" value="0.0 0.0 0.0" />
+		<arg name="robot_position" value="-3.0 1.0 1.0" />
 	</include>
 </scenario>

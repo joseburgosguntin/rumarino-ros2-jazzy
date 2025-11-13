@@ -6,8 +6,8 @@ use crate::{MapObject, Mission, MissionExecutor, ObjectCls};
 // like the some sort of queue if a sequence of reactions is necessary
 pub(crate) struct PrecualifyMission {}
 
-const FAR_ENOUGH: f64 = 0.25;
-const OVERSHOOT: f64 = 0.50;
+const FAR_ENOUGH: f64 = 2.0;
+const OVERSHOOT: f64 = 2.0;
 
 impl PrecualifyMission {
     pub(crate) fn new() -> Self {
@@ -28,7 +28,7 @@ impl PrecualifyMission {
         ];
 
         // absolute distance from any corner of the object
-        const DISTANCE_TO_CORNER: f64 = 0.10; // 0.10 m == 10cm
+        const DISTANCE_TO_CORNER: f64 = 1.0; // 0.10 m == 10cm
         // a big number so that any corner is always closer
         const HUGE_NUMBER: f64 = 10000000.0;
 
@@ -53,12 +53,13 @@ impl PrecualifyMission {
         }
 
         for i in 0..corner_pluss.len() {
-            td.move_to(corner_pluss[starting_i + i % corner_pluss.len()]);
+            td.move_to(corner_pluss[(starting_i + i) % corner_pluss.len()]);
         }
         td.move_to(initial_sub_pos);
     }
 
     fn go_through(&self, td: &MissionExecutor, idx: usize) {
+        std::thread::sleep_ms(10_000);
         let sub_pose = td.pose.load();
         let object = MapObject::from(&td.map.load().objects[idx]);
 
@@ -71,11 +72,15 @@ impl PrecualifyMission {
         let before_2d = object_pos_2d - direction_2d * FAR_ENOUGH;
         let before = Vector3::new(before_2d.x, before_2d.y, object_pos.z);
 
+        r2r::log_info!("before object_pos", "{object_pos_2d:?}");
+        r2r::log_info!("before sub_pos", "{sub_pos_2d:?}");
+        r2r::log_info!("before", "{before:?}");
         td.move_to(before);
 
         let overshoot_2d = object_pos_2d + direction_2d * OVERSHOOT;
         let overshoot = Vector3::new(overshoot_2d.x, overshoot_2d.y, object_pos.z);
 
+        r2r::log_info!("overshoot", "{overshoot:?}");
         td.move_to(overshoot);
     }
 }
