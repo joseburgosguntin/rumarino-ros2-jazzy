@@ -49,8 +49,12 @@ const CLOSE_ENOUGH: f64 = 1.0;
 
 impl MissionExecutor {
     pub fn new(mission: Box<dyn Mission>) -> Self {
-        let origin = Pose { pos: Vector3::zeros(), rot: Quaternion::new(1.0, 0.0, 0.0, 0.0) };
-        let goal = Vector6::zeros();
+        // hardcoded so it doesn't freak out while it waits for first odometry
+        let origin = Pose { pos: Vector3::new(-3.0, 1.0, 1.0), rot: Quaternion::identity() };
+        let (roll, pitch, yaw) = UnitQuaternion::from_quaternion(origin.rot).euler_angles();
+        let mut goal = Vector6::zeros();
+        goal.fixed_rows_mut::<3>(0).copy_from(&origin.pos);
+        goal.fixed_rows_mut::<3>(3).copy_from(&Vector3::new(roll, pitch, yaw));
         Self {
             map: ArcSwap::new(Arc::new(MapMsg::default())),
             map_objects_reacted: AtomicUsize::new(0),
@@ -118,7 +122,6 @@ impl From<&r2r::interfaces::msg::MapObject> for MapObject {
     }
 }
 
-// #[async_trait::async_trait]
 trait Mission: Send + Sync {
     fn react_to_object(&self, td: &MissionExecutor, idx: usize);
 }
@@ -179,34 +182,12 @@ async fn main() {
     const KI: Vector6<f64> = Vector6::new(0.10, 0.10, 0.05, 0.05, 0.05, 0.01);
     const KD: Vector6<f64> = Vector6::new(0.70, 0.90, 0.40, 0.20, 0.20, 0.80);
 
-    // const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
-    //     -1.0, -1.0,  1.0,
-    //      1.0, -1.0, -1.0,
-    //     -1.0,  1.0, -1.0,
-    //      1.0,  1.0,  1.0,
-    // );
-
     const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
-        -1.0, -1.0,  1.0,
-        -1.0,  1.0, -1.0,
-         1.0, -1.0, -1.0,
-         1.0,  1.0,  1.0,
+        -1.0,  1.0,  1.0,
+        -1.0, -1.0, -1.0,
+         1.0,  1.0, -1.0,
+         1.0, -1.0,  1.0,
     );
-
-
-    // const TAM_X_Y_YAW: Matrix4x3<f64> = Matrix4x3::new(
-    //     -1.0, -1.0,  1.0,
-    //      1.0,  1.0,  1.0,
-    //     -1.0,  1.0, -1.0,
-    //      1.0, -1.0, -1.0,
-    // );
-
-    // const TAM_Z_ROLL_PITCH: Matrix4x3<f64> = Matrix4x3::new(
-    //     -1.0,  1.0,  1.0,
-    //     -1.0,  1.0, -1.0,
-    //     -1.0, -1.0,  1.0,
-    //     -1.0, -1.0, -1.0,
-    // );
 
     const TAM_Z_ROLL_PITCH: Matrix4x3<f64> = Matrix4x3::new(
         -1.0,  1.0,  1.0,
@@ -239,14 +220,13 @@ async fn main() {
             let vel_err = (pose_err - prev_pose_err) / dt;
             sum_err += pose_err * dt;
 
-            let mut wrench = KP.component_mul(&pose_err) + KI.component_mul(&sum_err) + KD.component_mul(&vel_err);
+            let wrench = KP.component_mul(&pose_err) + KI.component_mul(&sum_err) + KD.component_mul(&vel_err);
 
-            let unit_2 = UnitQuaternion::from_euler_angles(0.0, 0.0, -yaw);
-            let rotated = unit_2 * wrench.xyz();
+            let rotated = unit.conjugate() * wrench.xyz();
             let xy_error = wrench.xy().norm();
             // only apply yaw when close
             let yaw_scale = if xy_error < 0.5 { 1.0 } else { 0.0 };
-            let input_x_y_yaw = Vector3::new(1.0 * rotated.x, -1.0 * rotated.y, wrench[5] * yaw_scale);
+            let input_x_y_yaw = Vector3::new(rotated.x, rotated.y, wrench[5] * yaw_scale);
             let input_z_roll_pitch = Vector3::new(wrench.z, -wrench[3], wrench[4]);
 
             // r2r::log_info!("wrench", "{wrench:?}");
@@ -309,28 +289,6 @@ async fn main() {
     tokio::spawn(consume_odometry_sub(Arc::clone(&td)));
     tokio::spawn(consume_new_objects(Arc::clone(&td)));
     tokio::spawn(go_to_goal(Arc::clone(&td)));
-
-    // td.goal.store(Arc::new(Vector6::<f64>::new(-5.0, 5.5, 1.0, 0.0, 0.0, 1.5708))); // TODO: get me for real
-
-    // FIX: in simulator we say hes there, so this is to keep him still until it reacts
-    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 0.5, 1.0, 0.0, 0.0, 0.0)));
-    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 0.5, 1.0, 0.0, 0.0, 1.5708)));
-    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 0.5, 1.0, 0.0, 0.0, 0.0)));
-    // td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 10.0, 1.0, 0.0, 0.0, 0.0)));
-
-
-    td.goal.store(Arc::new(Vector6::<f64>::new(-3.0, 1.0, 1.0, 0.0, 0.0, 0.0)));
-
-    // let mut map_msg = MapMsg::default();
-    // let mut map_object_msg = MapObjectMsg::default();
-    // map_object_msg.cls = ObjectCls::Gate as i32;
-    // map_object_msg.bbox.center.position = PointMsg {x: 0.0, y: 1.5, z: 2.0};
-    // map_object_msg.bbox.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
-    // map_object_msg.bbox.size = Vector3Msg {x: 0.04, y: 3.0 + (2.0 * 0.04), z: 4.0};
-    // map_msg.objects.push(map_object_msg);
-    // td.map.store(Arc::new(map_msg));
-    // td.new_objects.notify_one();
-
 
     let mut map_msg = MapMsg::default();
 

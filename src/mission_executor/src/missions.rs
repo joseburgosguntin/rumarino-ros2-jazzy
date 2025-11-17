@@ -28,7 +28,7 @@ impl PrecualifyMission {
         ];
 
         // absolute distance from any corner of the object
-        const DISTANCE_TO_CORNER: f64 = 1.0; // 0.10 m == 10cm
+        const DISTANCE_TO_CORNER: f64 = 2.0;
         // a big number so that any corner is always closer
         const HUGE_NUMBER: f64 = 10000000.0;
 
@@ -59,7 +59,6 @@ impl PrecualifyMission {
     }
 
     fn go_through(&self, td: &MissionExecutor, idx: usize) {
-        std::thread::sleep_ms(10_000);
         let sub_pose = td.pose.load();
         let object = MapObject::from(&td.map.load().objects[idx]);
 
