@@ -42,16 +42,25 @@ class OneshotMap(Node):
             size_xyz={"x": 1000.0, "y": 1000.0, "z": 3.0},
         )
 
+        dummy = MapObject()
+        dummy.cls = 4
+        dummy.bbox = make_bbox(
+            center_pos={"x": -3.0, "y": -2.0, "z": 0.0},
+            center_ori={"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0},
+            size_xyz={"x": 3.0, "y": 3.0, "z": 3.0},
+        )
+        msg.objects.append(dummy)
+
         # objects (e.g., one gate)
         gate = MapObject()
         gate.cls = 2
         gate.bbox = make_bbox(
-            center_pos={"x": 0.0, "y": 0.0, "z": 3.0},
+            center_pos={"x": -10.0, "y": -5.0, "z": 1.0},
             center_ori={"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0},
             size_xyz={"x": 0.04, "y": 3 + (2 * 0.04), "z": 4.0},
         )
         msg.objects.append(gate)
-
+        
         # publish
         self.pub.publish(msg)
         self.get_logger().info("Published map_msg once")

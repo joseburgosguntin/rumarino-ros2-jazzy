@@ -1,11 +1,11 @@
 #![allow(unused)]
-
 #![deny(unused_must_use)]
 //! This process should just realize a `Mission` passed as a ROS arg (somehow) and terminate.
 //! A `Mission` is a scenario where the submarine must react to diferent `ObjectCls` with their
 //! respective sequences of actions.
 
 mod missions;
+mod navigation;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -13,8 +13,12 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use futures::StreamExt;
-use nalgebra::{ArrayStorage, Matrix4x3, Quaternion, SimdPartialOrd, UnitQuaternion, Vector, Vector3, Vector6, U8};
+use nalgebra::{
+    ArrayStorage, Isometry3, Matrix4x3, Point3, Quaternion, SimdPartialOrd, U8, UnitQuaternion,
+    Vector, Vector3, Vector6,
+};
 type Vector8<T> = Vector<T, U8, ArrayStorage<T, 8, 1>>;
+use parry3d_f64::shape::Segment;
 use r2r::{Node, ParameterValue, QosProfile};
 use tokio::sync::Notify;
 
@@ -50,11 +54,15 @@ const CLOSE_ENOUGH: f64 = 1.0;
 impl MissionExecutor {
     pub fn new(mission: Box<dyn Mission>) -> Self {
         // hardcoded so it doesn't freak out while it waits for first odometry
-        let origin = Pose { pos: Vector3::new(-3.0, 1.0, 1.0), rot: Quaternion::identity() };
+        let origin = Pose {
+            pos: Vector3::new(-3.0, 1.0, 1.0),
+            rot: Quaternion::identity(),
+        };
         let (roll, pitch, yaw) = UnitQuaternion::from_quaternion(origin.rot).euler_angles();
         let mut goal = Vector6::zeros();
         goal.fixed_rows_mut::<3>(0).copy_from(&origin.pos);
-        goal.fixed_rows_mut::<3>(3).copy_from(&Vector3::new(roll, pitch, yaw));
+        goal.fixed_rows_mut::<3>(3)
+            .copy_from(&Vector3::new(roll, pitch, yaw));
         Self {
             map: ArcSwap::new(Arc::new(MapMsg::default())),
             map_objects_reacted: AtomicUsize::new(0),
@@ -79,20 +87,70 @@ impl MissionExecutor {
             let dist = pose.pos.metric_distance(&dest);
             r2r::log_info!("dist", "{dist}, pose: {pose:?}, goal: {goal:?}");
             if dist < CLOSE_ENOUGH {
-                break
+                break;
             } else {
                 std::thread::sleep(Duration::from_millis(100));
             }
         }
     }
+
+    pub fn move_to_points(&self, mut dest: Vec<Point3<f64>>) {
+        let sub_pose = self.pose.load();
+        let map = self.map.load();
+        let object_list = &map.objects;
+        let map_bounds = BoundingBox3D::from(&map.map_bounds);
+
+        let mut i = 0;
+        while i != object_list.len() {
+            let object = MapObject::from(&object_list[i]);
+            if object.can_collide {
+                i += 1;
+                continue;
+            }
+
+            let mut new_points: Vec<Point3<f64>> = Vec::new();
+
+            let mut before_point: Point3<f64> = sub_pose.pos.into();
+
+            for point in &mut dest {
+                let segment = Segment::new(before_point, (*point).into());
+                let pos1 = Isometry3::from_parts(
+                    object.bbox.center.pos.into(),
+                    UnitQuaternion::from_quaternion(object.bbox.center.rot),
+                );
+                let extra_point =
+                    navigation::get_new_point(&object.bbox, &pos1, segment, &map_bounds);
+                if let Some(extra_point) = extra_point {
+                    new_points.push(extra_point);
+                }
+                new_points.push(*point);
+                before_point = *point;
+            }
+            if new_points == dest {
+                i += 1;
+            } else {
+                i = 0;
+                dest = new_points;
+            }
+        }
+
+        r2r::log_info!("point_list", "{dest:#?}");
+
+        for point in dest {
+            self.move_to(point.coords);
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
 }
 
 #[repr(i32)]
+#[derive(PartialEq, Eq)]
 pub enum ObjectCls {
     Cube = 0,
     Rectangle = 1,
     Gate = 2,
     Shark = 3,
+    Other = 4,
 }
 
 pub struct BoundingBox3D {
@@ -103,21 +161,26 @@ pub struct BoundingBox3D {
 pub struct MapObject {
     cls: ObjectCls,
     bbox: BoundingBox3D,
+    can_collide: bool,
+}
+
+impl From<&r2r::vision_msgs::msg::BoundingBox3D> for BoundingBox3D {
+    fn from(value: &r2r::vision_msgs::msg::BoundingBox3D) -> Self {
+        Self {
+            center: (&value.center).into(),
+            size: Vector3::new(value.size.x, value.size.y, value.size.z),
+        }
+    }
 }
 
 impl From<&r2r::interfaces::msg::MapObject> for MapObject {
     fn from(value: &r2r::interfaces::msg::MapObject) -> Self {
         let cls = unsafe { std::mem::transmute::<i32, ObjectCls>(value.cls) };
+        let can_collide = cls == ObjectCls::Gate;
         Self {
             cls,
-            bbox: BoundingBox3D {
-                center: Pose::from(&value.bbox.center),
-                size: Vector3::new(
-                    value.bbox.size.x,
-                    value.bbox.size.y,
-                    value.bbox.size.z,
-                ),
-            },
+            bbox: (&value.bbox).into(),
+            can_collide,
         }
     }
 }
@@ -220,7 +283,9 @@ async fn main() {
             let vel_err = (pose_err - prev_pose_err) / dt;
             sum_err += pose_err * dt;
 
-            let wrench = KP.component_mul(&pose_err) + KI.component_mul(&sum_err) + KD.component_mul(&vel_err);
+            let wrench = KP.component_mul(&pose_err)
+                + KI.component_mul(&sum_err)
+                + KD.component_mul(&vel_err);
 
             let rotated = unit.conjugate() * wrench.xyz();
             let xy_error = wrench.xy().norm();
@@ -233,8 +298,12 @@ async fn main() {
             // r2r::log_info!("rotated", "{rotated:?}");
 
             let mut thurstor_values = Vector8::zeros();
-            thurstor_values.fixed_rows_mut::<4>(0).copy_from(&(TAM_X_Y_YAW * input_x_y_yaw));
-            thurstor_values.fixed_rows_mut::<4>(4).copy_from(&(TAM_Z_ROLL_PITCH * input_z_roll_pitch));
+            thurstor_values
+                .fixed_rows_mut::<4>(0)
+                .copy_from(&(TAM_X_Y_YAW * input_x_y_yaw));
+            thurstor_values
+                .fixed_rows_mut::<4>(4)
+                .copy_from(&(TAM_Z_ROLL_PITCH * input_z_roll_pitch));
 
             // r2r::log_info!("thurstor_values", "{thurstor_values:?}");
 
@@ -270,7 +339,7 @@ async fn main() {
             let mut reacted = td.map_objects_reacted.load(Ordering::Relaxed);
             loop {
                 let objects_len = td.map.load().objects.len();
-                if reacted == objects_len { 
+                if reacted == objects_len {
                     break;
                 }
                 while reacted < objects_len {
@@ -292,23 +361,82 @@ async fn main() {
 
     let mut map_msg = MapMsg::default();
 
-    map_msg.map_bounds.center.position = PointMsg {x: 0.0, y: 1.5, z: 2.0};
-    map_msg.map_bounds.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
-    map_msg.map_bounds.size = Vector3Msg { x: 1000.0, y: 1000.0, z: 3.0 };
+    map_msg.map_bounds.center.position = PointMsg {
+        x: 0.0,
+        y: 1.5,
+        z: 2.0,
+    };
+    map_msg.map_bounds.center.orientation = QuaternionMsg {
+        w: 1.0,
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+    map_msg.map_bounds.size = Vector3Msg {
+        x: 1000.0,
+        y: 1000.0,
+        z: 3.0,
+    };
 
     let mut gate_object_msg = MapObjectMsg::default();
     gate_object_msg.cls = ObjectCls::Gate as i32;
-    gate_object_msg.bbox.center.position = PointMsg {x: 0.0, y: 1.5, z: 2.0};
-    gate_object_msg.bbox.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
-    gate_object_msg.bbox.size = Vector3Msg {x: 0.04, y: 3.0 + (2.0 * 0.04), z: 4.0};
+    gate_object_msg.bbox.center.position = PointMsg {
+        x: 5.0,
+        y: 1.5,
+        z: 2.0,
+    };
+    gate_object_msg.bbox.center.orientation = QuaternionMsg {
+        w: 1.0,
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+    gate_object_msg.bbox.size = Vector3Msg {
+        x: 0.04,
+        y: 3.0 + (2.0 * 0.04),
+        z: 4.0,
+    };
 
     let mut cube_object_msg = MapObjectMsg::default();
     cube_object_msg.cls = ObjectCls::Cube as i32;
-    cube_object_msg.bbox.center.position = PointMsg {x: 10.0, y: 1.0, z: 2.0};
-    cube_object_msg.bbox.center.orientation = QuaternionMsg {w: 1.0, x: 0.0, y: 0.0, z: 0.0};
-    cube_object_msg.bbox.size = Vector3Msg {x: 0.2, y: 0.2, z: 4.0};
+    cube_object_msg.bbox.center.position = PointMsg {
+        x: 20.0,
+        y: 1.0,
+        z: 2.0,
+    };
+    cube_object_msg.bbox.center.orientation = QuaternionMsg {
+        w: 1.0,
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+    cube_object_msg.bbox.size = Vector3Msg {
+        x: 0.2,
+        y: 0.2,
+        z: 4.0,
+    };
+
+    let mut other_object_msg = MapObjectMsg::default();
+    other_object_msg.cls = ObjectCls::Other as i32;
+    other_object_msg.bbox.center.position = PointMsg {
+        x: 0.0,
+        y: 1.0,
+        z: 2.0,
+    };
+    other_object_msg.bbox.center.orientation = QuaternionMsg {
+        w: 1.0,
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+    other_object_msg.bbox.size = Vector3Msg {
+        x: 1.5,
+        y: 1.5,
+        z: 1.5,
+    };
 
     map_msg.objects.push(gate_object_msg);
+    map_msg.objects.push(other_object_msg);
     map_msg.objects.push(cube_object_msg);
 
     td.map.store(Arc::new(map_msg));
