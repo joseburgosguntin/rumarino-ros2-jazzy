@@ -1,0 +1,6 @@
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = [ "-C", "link-arg=-fuse-ld=ld" ]
+
+[env]
+IDL_PACKAGE_FILTER = { value = "std_msgs;geometry_msgs;nav_msgs;vision_msgs;interfaces" }
