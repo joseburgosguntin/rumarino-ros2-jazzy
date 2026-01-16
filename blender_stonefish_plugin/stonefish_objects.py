@@ -1,8 +1,6 @@
 """stonefish_objects.py
-In this module we have a Internal Representation of the stonefish objects that we want to interface with this project.
-All of this dataclasses comes from Stonefish.
+In this module we have a Internal Representation of the stonefish objects that we want to interface.
 """
-
 
 from dataclasses import dataclass, field
 from typing import Tuple, Optional, List, Dict
@@ -13,7 +11,7 @@ from abc import ABCMeta, abstractmethod
 class ComposableElement(metaclass=ABCMeta):
     """Base class for composable XML elements"""
 
-    def __init__(self, children: Optional[List['ComposableElement']] = None):
+    def __init__(self, children: Optional[List["ComposableElement"]] = None):
         self.children = children if children is not None else []
 
     @abstractmethod
@@ -23,13 +21,13 @@ class ComposableElement(metaclass=ABCMeta):
 
     def _indent(self, level: int) -> str:
         """Helper to generate indentation"""
-        return '\t' * level
+        return "\t" * level
 
     def _render_children(self, indent: int) -> str:
         """Render all children with proper indentation"""
         if not self.children:
             return ""
-        return '\n'.join(child.generate_xml_string(indent) for child in self.children)
+        return "\n".join(child.generate_xml_string(indent) for child in self.children)
 
 
 @dataclass
@@ -43,6 +41,7 @@ class Material(ComposableElement):
         restitution: Coefficient of restitution (0.0 to 1.0)
         magnetic: Magnetic properties (<0 ferromagnetic, 0 nonmagnetic, >0 magnet)
     """
+
     name: str
     density: float
     restitution: float
@@ -52,42 +51,8 @@ class Material(ComposableElement):
         super().__init__()
 
     def generate_xml_string(self, indent: int = 0) -> str:
-        """Generate XML for material definition"""
         i = self._indent(indent)
         return f'{i}<material name="{self.name}" density="{self.density:.1f}" restitution="{self.restitution:.1f}" />'
-
-    # Common material presets
-    @staticmethod
-    def pvc() -> 'Material':
-        return Material(name="pvc", density=1380.0, restitution=0.5)
-
-    @staticmethod
-    def steel() -> 'Material':
-        return Material(name="steel", density=7800.0, restitution=0.3)
-
-    @staticmethod
-    def aluminium() -> 'Material':
-        return Material(name="aluminium", density=2700.0, restitution=0.4)
-
-    @staticmethod
-    def acrylic() -> 'Material':
-        return Material(name="acrylic", density=1190.0, restitution=0.5)
-
-    @staticmethod
-    def hdpe() -> 'Material':
-        return Material(name="hdpe", density=950.0, restitution=0.6)
-
-    @staticmethod
-    def rubber() -> 'Material':
-        return Material(name="rubber", density=1100.0, restitution=0.8)
-
-    @staticmethod
-    def wood() -> 'Material':
-        return Material(name="wood", density=700.0, restitution=0.4)
-
-    @staticmethod
-    def foam() -> 'Material':
-        return Material(name="foam", density=100.0, restitution=0.2)
 
 
 @dataclass
@@ -101,6 +66,7 @@ class FrictionPair(ComposableElement):
         static_friction: Static friction coefficient
         dynamic_friction: Dynamic friction coefficient
     """
+
     material1: str
     material2: str
     static_friction: float
@@ -112,8 +78,10 @@ class FrictionPair(ComposableElement):
     def generate_xml_string(self, indent: int = 0) -> str:
         """Generate XML for friction pair"""
         i = self._indent(indent)
-        return (f'{i}<friction material1="{self.material1}" material2="{self.material2}" '
-                f'static="{self.static_friction:.1f}" dynamic="{self.dynamic_friction:.1f}" />')
+        return (
+            f'{i}<friction material1="{self.material1}" material2="{self.material2}" '
+            f'static="{self.static_friction:.1f}" dynamic="{self.dynamic_friction:.1f}" />'
+        )
 
 
 @dataclass
@@ -124,6 +92,7 @@ class FrictionTable(ComposableElement):
     Attributes:
         pairs: List of material pair friction definitions
     """
+
     pairs: List[FrictionPair] = field(default_factory=list)
 
     def __post_init__(self):
@@ -140,10 +109,10 @@ class FrictionTable(ComposableElement):
         if not self.pairs:
             return ""
         i = self._indent(indent)
-        lines = [f'{i}<friction_table>']
+        lines = [f"{i}<friction_table>"]
         lines.append(self._render_children(indent + 1))
-        lines.append(f'{i}</friction_table>')
-        return '\n'.join(lines)
+        lines.append(f"{i}</friction_table>")
+        return "\n".join(lines)
 
 
 @dataclass
@@ -158,6 +127,7 @@ class Look(ComposableElement):
         metalness: Metalness factor (0.0 = dielectric, 1.0 = metal)
         reflectivity: Reflectivity factor (0.0 to 1.0)
     """
+
     name: str
     color: Tuple[float, float, float]
     roughness: float = 0.5
@@ -171,41 +141,10 @@ class Look(ComposableElement):
         """Generate XML for look definition"""
         i = self._indent(indent)
         r, g, b = self.color
-        return (f'{i}<look name="{self.name}" rgb="{r:.1f} {g:.1f} {b:.1f}" '
-                f'roughness="{self.roughness:.1f}" metalness="{self.metalness:.1f}" />')
-
-    # Common look presets
-    @staticmethod
-    def white() -> 'Look':
-        return Look(name="white", color=(1.0, 1.0, 1.0), roughness=0.3)
-
-    @staticmethod
-    def black() -> 'Look':
-        return Look(name="black", color=(0.0, 0.0, 0.0), roughness=0.3)
-
-    @staticmethod
-    def gray() -> 'Look':
-        return Look(name="gray", color=(0.5, 0.5, 0.5), roughness=0.4)
-
-    @staticmethod
-    def red() -> 'Look':
-        return Look(name="red", color=(1.0, 0.0, 0.0), roughness=0.3)
-
-    @staticmethod
-    def green() -> 'Look':
-        return Look(name="green", color=(0.0, 1.0, 0.0), roughness=0.3)
-
-    @staticmethod
-    def blue() -> 'Look':
-        return Look(name="blue", color=(0.0, 0.0, 1.0), roughness=0.3)
-
-    @staticmethod
-    def yellow() -> 'Look':
-        return Look(name="yellow", color=(1.0, 1.0, 0.0), roughness=0.3)
-
-    @staticmethod
-    def orange() -> 'Look':
-        return Look(name="orange", color=(1.0, 0.5, 0.0), roughness=0.3)
+        return (
+            f'{i}<look name="{self.name}" rgb="{r:.1f} {g:.1f} {b:.1f}" '
+            f'roughness="{self.roughness:.1f}" metalness="{self.metalness:.1f}" />'
+        )
 
 
 @dataclass
@@ -217,6 +156,7 @@ class WorldTransform:
         xyz: Position (x, y, z) in meters
         rpy: Orientation (roll, pitch, yaw) in radians
     """
+
     xyz: Tuple[float, float, float]
     rpy: Tuple[float, float, float]
 
@@ -229,9 +169,9 @@ class WorldTransform:
         return "{:.5f} {:.5f} {:.5f}".format(*self.rpy)
 
 
-
 class PhysicsType(Enum):
     """Physics simulation type"""
+
     SURFACE = "surface"
     FLOATING = "floating"
     SUBMERGED = "submerged"
@@ -246,14 +186,15 @@ class PhysicsProperties:
         physics_type: Type of physics simulation
         buoyant: Enable buoyancy calculation
     """
+
     physics_type: PhysicsType = PhysicsType.SURFACE
     buoyant: bool = False
-
 
 
 @dataclass
 class StaticObject(ComposableElement):
     """Base class for all static objects"""
+
     name: str
     world_transform: WorldTransform
     material: str
@@ -299,9 +240,9 @@ class Plane(StaticObject):
             self._generate_material_xml(indent + 1),
             self._generate_look_xml(indent + 1),
             self._generate_world_transform_xml(indent + 1),
-            f'{i}</static>'
+            f"{i}</static>",
         ]
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 @dataclass
@@ -317,28 +258,33 @@ class Box(StaticObject):
         dimensions: Box dimensions (x, y, z) in meters
         thickness: Wall thickness for hollow box (None = solid)
     """
+
     dimensions: Tuple[float, float, float] = (1.0, 1.0, 1.0)
     thickness: Optional[float] = None
 
     def generate_xml_string(self, indent: int = 0) -> str:
         """Generate XML for box"""
         i = self._indent(indent)
-        dims = ' '.join([f"{d:.4f}" for d in self.dimensions])
+        dims = " ".join([f"{d:.4f}" for d in self.dimensions])
 
         lines = [f'{i}<static name="{self.name}" type="box">']
 
         if self.thickness:
-            lines.append(f'{self._indent(indent + 1)}<dimensions xyz="{dims}" thickness="{self.thickness:.4f}" />')
+            lines.append(
+                f'{self._indent(indent + 1)}<dimensions xyz="{dims}" thickness="{self.thickness:.4f}" />'
+            )
         else:
             lines.append(f'{self._indent(indent + 1)}<dimensions xyz="{dims}" />')
 
-        lines.extend([
-            self._generate_world_transform_xml(indent + 1),
-            self._generate_material_xml(indent + 1),
-            self._generate_look_xml(indent + 1),
-            f'{i}</static>'
-        ])
-        return '\n'.join(lines)
+        lines.extend(
+            [
+                self._generate_world_transform_xml(indent + 1),
+                self._generate_material_xml(indent + 1),
+                self._generate_look_xml(indent + 1),
+                f"{i}</static>",
+            ]
+        )
+        return "\n".join(lines)
 
 
 @dataclass
@@ -354,6 +300,7 @@ class Cylinder(StaticObject):
         radius: Cylinder radius in meters
         height: Cylinder height in meters
     """
+
     radius: float = 0.5
     height: float = 1.0
 
@@ -366,9 +313,9 @@ class Cylinder(StaticObject):
             self._generate_world_transform_xml(indent + 1),
             self._generate_material_xml(indent + 1),
             self._generate_look_xml(indent + 1),
-            f'{i}</static>'
+            f"{i}</static>",
         ]
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 @dataclass
@@ -383,6 +330,7 @@ class Sphere(StaticObject):
         look: Look name
         radius: Sphere radius in meters
     """
+
     radius: float = 0.5
 
     def generate_xml_string(self, indent: int = 0) -> str:
@@ -394,9 +342,9 @@ class Sphere(StaticObject):
             self._generate_world_transform_xml(indent + 1),
             self._generate_material_xml(indent + 1),
             self._generate_look_xml(indent + 1),
-            f'{i}</static>'
+            f"{i}</static>",
         ]
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 @dataclass
@@ -412,6 +360,7 @@ class Torus(StaticObject):
         major_radius: Major radius (from center to tube center) in meters
         minor_radius: Minor radius (tube radius) in meters
     """
+
     major_radius: float = 1.0
     minor_radius: float = 0.2
 
@@ -424,9 +373,9 @@ class Torus(StaticObject):
             self._generate_world_transform_xml(indent + 1),
             self._generate_material_xml(indent + 1),
             self._generate_look_xml(indent + 1),
-            f'{i}</static>'
+            f"{i}</static>",
         ]
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 @dataclass
@@ -444,6 +393,7 @@ class Model(StaticObject):
         origin_rpy: Mesh origin rotation (roll, pitch, yaw)
         origin_xyz: Mesh origin translation (x, y, z)
     """
+
     mesh_filename: str = ""
     mesh_scale: float = 1.0
     origin_rpy: Tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -452,26 +402,27 @@ class Model(StaticObject):
     def generate_xml_string(self, indent: int = 0) -> str:
         """Generate XML for mesh model"""
         i = self._indent(indent)
-        origin_rpy_str = ' '.join([f"{r:.4f}" for r in self.origin_rpy])
-        origin_xyz_str = ' '.join([f"{x:.4f}" for x in self.origin_xyz])
+        origin_rpy_str = " ".join([f"{r:.4f}" for r in self.origin_rpy])
+        origin_xyz_str = " ".join([f"{x:.4f}" for x in self.origin_xyz])
 
         lines = [
             f'{i}<static name="{self.name}" type="model">',
-            f'{self._indent(indent + 1)}<physical>',
+            f"{self._indent(indent + 1)}<physical>",
             f'{self._indent(indent + 2)}<mesh filename="{self.mesh_filename}" scale="{self.mesh_scale:.4f}" />',
             f'{self._indent(indent + 2)}<origin rpy="{origin_rpy_str}" xyz="{origin_xyz_str}" />',
-            f'{self._indent(indent + 1)}</physical>',
+            f"{self._indent(indent + 1)}</physical>",
             self._generate_world_transform_xml(indent + 1),
             self._generate_material_xml(indent + 1),
             self._generate_look_xml(indent + 1),
-            f'{i}</static>'
+            f"{i}</static>",
         ]
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 # ============================================================================
 # Compound Objects (Multi-part rigid bodies)
 # ============================================================================
+
 
 @dataclass
 class ExternalPart:
@@ -496,6 +447,7 @@ class ExternalPart:
         mesh_filename: For model type
         mesh_scale: For model type
     """
+
     name: str
     geometry_type: str  # "cylinder", "box", "sphere", "model"
     material: str
@@ -528,6 +480,7 @@ class CompoundObject(ComposableElement):
         physics: Physics properties for the entire compound
         self_collisions: Enable collision between parts
     """
+
     name: str
     world_transform: WorldTransform
     external_parts: List[ExternalPart]
@@ -543,19 +496,23 @@ class CompoundObject(ComposableElement):
         lines = [f'{i}<compound name="{self.name}">']
 
         # World transform
-        rpy_str = ' '.join([f"{r:.4f}" for r in self.world_transform.rpy])
-        xyz_str = ' '.join([f"{x:.4f}" for x in self.world_transform.xyz])
-        lines.append(f'{self._indent(indent + 1)}<world_transform rpy="{rpy_str}" xyz="{xyz_str}" />')
+        rpy_str = " ".join([f"{r:.4f}" for r in self.world_transform.rpy])
+        xyz_str = " ".join([f"{x:.4f}" for x in self.world_transform.xyz])
+        lines.append(
+            f'{self._indent(indent + 1)}<world_transform rpy="{rpy_str}" xyz="{xyz_str}" />'
+        )
 
         # External parts
         for part in self.external_parts:
-            lines.append(f'{self._indent(indent + 1)}<external_part name="{part.name}" type="{part.geometry_type}" material="{part.material}" look="{part.look}">')
+            lines.append(
+                f'{self._indent(indent + 1)}<external_part name="{part.name}" type="{part.geometry_type}" material="{part.material}" look="{part.look}">'
+            )
             # Add part-specific XML here based on geometry_type
             # This is a simplified version - you may want to expand based on your needs
-            lines.append(f'{self._indent(indent + 1)}</external_part>')
+            lines.append(f"{self._indent(indent + 1)}</external_part>")
 
-        lines.append(f'{i}</compound>')
-        return '\n'.join(lines)
+        lines.append(f"{i}</compound>")
+        return "\n".join(lines)
 
 
 # ============================================================================
@@ -574,6 +531,7 @@ class Gate:
         height: Height of vertical posts (meters)
         cylinder_radius: Radius of cylinders (post/bar thickness)
     """
+
     name: str
     world_transform: WorldTransform
     material: str
@@ -594,25 +552,23 @@ class Gate:
         left_post = Cylinder(
             name=f"{self.name}_Left",
             world_transform=WorldTransform(
-                xyz=(bx - half_w, by, post_z),
-                rpy=(rx, ry, rz)
+                xyz=(bx - half_w, by, post_z), rpy=(rx, ry, rz)
             ),
             material=self.material,
             look=self.look,
             radius=self.cylinder_radius,
-            height=self.height
+            height=self.height,
         )
 
         right_post = Cylinder(
             name=f"{self.name}_Right",
             world_transform=WorldTransform(
-                xyz=(bx + half_w, by, post_z),
-                rpy=(rx, ry, rz)
+                xyz=(bx + half_w, by, post_z), rpy=(rx, ry, rz)
             ),
             material=self.material,
             look=self.look,
             radius=self.cylinder_radius,
-            height=self.height
+            height=self.height,
         )
 
         # Top bar (rotated to horizontal)
@@ -621,12 +577,12 @@ class Gate:
             name=f"{self.name}_Top",
             world_transform=WorldTransform(
                 xyz=(bx, by, bz + self.height),
-                rpy=(1.5708, ry, rz)  # 90 degree rotation
+                rpy=(1.5708, ry, rz),  # 90 degree rotation
             ),
             material=self.material,
             look=self.look,
             radius=self.cylinder_radius,
-            height=top_length
+            height=top_length,
         )
 
         return [left_post, right_post, top_bar]
@@ -645,6 +601,7 @@ class Marker:
         diameter: Marker diameter in meters
         height: Marker height in meters
     """
+
     name: str
     world_transform: WorldTransform
     material: str
@@ -661,19 +618,19 @@ class Marker:
         return Cylinder(
             name=self.name,
             world_transform=WorldTransform(
-                xyz=(x, y, adjusted_z),
-                rpy=self.world_transform.rpy
+                xyz=(x, y, adjusted_z), rpy=self.world_transform.rpy
             ),
             material=self.material,
             look=self.look,
             radius=self.diameter / 2.0,
-            height=self.height
+            height=self.height,
         )
 
 
 # ============================================================================
 # Environment
 # ============================================================================
+
 
 @dataclass
 class Ocean(ComposableElement):
@@ -685,6 +642,7 @@ class Ocean(ComposableElement):
         particles: Enable particle system for visualization
         current: Current velocity (x, y, z) in m/s
     """
+
     waves: float = 0.0
     particles: bool = True
     current: Tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -695,7 +653,7 @@ class Ocean(ComposableElement):
     def generate_xml_string(self, indent: int = 0) -> str:
         """Generate XML for ocean"""
         i = self._indent(indent)
-        current_str = ' '.join([f"{c:.4f}" for c in self.current])
+        current_str = " ".join([f"{c:.4f}" for c in self.current])
         particles_str = "true" if self.particles else "false"
 
         return f'{i}<ocean waves="{self.waves:.2f}" particles="{particles_str}" current="{current_str}" />'
@@ -710,6 +668,7 @@ class Atmosphere(ComposableElement):
         pressure: Atmospheric pressure in Pa
         temperature: Temperature in Celsius
     """
+
     pressure: float = 101325.0  # Standard atmosphere
     temperature: float = 20.0
 
@@ -731,6 +690,7 @@ class Sun(ComposableElement):
         azimuth: Sun azimuth angle in degrees
         elevation: Sun elevation angle in degrees
     """
+
     azimuth: float = 0.0
     elevation: float = 60.0
 
@@ -740,7 +700,9 @@ class Sun(ComposableElement):
     def generate_xml_string(self, indent: int = 0) -> str:
         """Generate XML for sun"""
         i = self._indent(indent)
-        return f'{i}<sun azimuth="{self.azimuth:.1f}" elevation="{self.elevation:.1f}" />'
+        return (
+            f'{i}<sun azimuth="{self.azimuth:.1f}" elevation="{self.elevation:.1f}" />'
+        )
 
 
 @dataclass
@@ -753,6 +715,7 @@ class Environment(ComposableElement):
         atmosphere: Atmospheric configuration
         sun: Sun lighting configuration
     """
+
     ocean: Optional[Ocean] = None
     atmosphere: Atmosphere = field(default_factory=Atmosphere)
     sun: Sun = field(default_factory=Sun)
@@ -768,20 +731,21 @@ class Environment(ComposableElement):
     def generate_xml_string(self, indent: int = 0) -> str:
         """Generate XML for environment"""
         i = self._indent(indent)
-        lines = [f'{i}<environment>']
+        lines = [f"{i}<environment>"]
 
         if self.ocean:
             lines.append(self.ocean.generate_xml_string(indent + 1))
         lines.append(self.atmosphere.generate_xml_string(indent + 1))
         lines.append(self.sun.generate_xml_string(indent + 1))
 
-        lines.append(f'{i}</environment>')
-        return '\n'.join(lines)
+        lines.append(f"{i}</environment>")
+        return "\n".join(lines)
 
 
 # ============================================================================
 # Complete Scenario
 # ============================================================================
+
 
 @dataclass
 class StonefishScenario(ComposableElement):
@@ -797,6 +761,7 @@ class StonefishScenario(ComposableElement):
         compound_objects: List of compound objects (multi-part rigid bodies)
         environment: Environment configuration
     """
+
     name: str = "Scenario"
     materials: List[Material] = field(default_factory=list)
     friction_table: FrictionTable = field(default_factory=FrictionTable)
@@ -821,7 +786,7 @@ class StonefishScenario(ComposableElement):
         i = self._indent(indent)
         lines = [
             '<?xml version="1.0"?>',
-            f'{i}<scenario>',
+            f"{i}<scenario>",
         ]
 
         # Materials
@@ -846,8 +811,8 @@ class StonefishScenario(ComposableElement):
         for obj in self.compound_objects:
             lines.append(obj.generate_xml_string(indent + 1))
 
-        lines.append(f'{i}</scenario>')
-        return '\n'.join(lines)
+        lines.append(f"{i}</scenario>")
+        return "\n".join(lines)
 
     def add_material(self, material: Material):
         """Add a material to the scenario"""
@@ -866,69 +831,6 @@ class StonefishScenario(ComposableElement):
         self.static_objects.append(obj)
         self.children.append(obj)
 
-        # Auto-register material and look if not already present
-        if obj.material not in [m.name for m in self.materials]:
-            # Try to find preset material
-            material_presets = {
-                "pvc": Material.pvc(),
-                "steel": Material.steel(),
-                "aluminium": Material.aluminium(),
-                "acrylic": Material.acrylic(),
-                "hdpe": Material.hdpe(),
-                "rubber": Material.rubber(),
-                "wood": Material.wood(),
-                "foam": Material.foam(),
-            }
-            if obj.material in material_presets:
-                self.add_material(material_presets[obj.material])
-
-        if obj.look not in [l.name for l in self.looks]:
-            # Try to find preset look
-            look_presets = {
-                "white": Look.white(),
-                "black": Look.black(),
-                "gray": Look.gray(),
-                "red": Look.red(),
-                "green": Look.green(),
-                "blue": Look.blue(),
-                "yellow": Look.yellow(),
-                "orange": Look.orange(),
-            }
-            if obj.look in look_presets:
-                self.add_look(look_presets[obj.look])
-
     def add_compound(self, compound: CompoundObject):
         """Add a compound object to the scenario"""
         self.compound_objects.append(compound)
-
-        # Auto-register materials and looks from all parts
-        for part in compound.external_parts:
-            if part.material not in [m.name for m in self.materials]:
-                material_presets = {
-                    "pvc": Material.pvc(),
-                    "steel": Material.steel(),
-                    "aluminium": Material.aluminium(),
-                    "acrylic": Material.acrylic(),
-                    "hdpe": Material.hdpe(),
-                    "rubber": Material.rubber(),
-                    "wood": Material.wood(),
-                    "foam": Material.foam(),
-                    "abs": Material(name="abs", density=1040.0, restitution=0.4),
-                }
-                if part.material in material_presets:
-                    self.add_material(material_presets[part.material])
-
-            if part.look not in [l.name for l in self.looks]:
-                look_presets = {
-                    "white": Look.white(),
-                    "black": Look.black(),
-                    "gray": Look.gray(),
-                    "red": Look.red(),
-                    "green": Look.green(),
-                    "blue": Look.blue(),
-                    "yellow": Look.yellow(),
-                    "orange": Look.orange(),
-                    "clear": Look(name="clear", color=(0.9, 0.9, 0.9), roughness=0.1),
-                }
-                if part.look in look_presets:
-                    self.add_look(look_presets[part.look])

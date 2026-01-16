@@ -1,26 +1,19 @@
 """
 Blender Object Extractor
 
-This module reads Blender .blend files and extracts static objects
+This module reads Blender .blend files and extracts Stonefish objects
 for conversion to Stonefish scenarios.
-
-It focuses on:
-- Object geometry (type, dimensions, transforms)
-- Custom properties (material, look)
-- Object naming conventions
 """
 
-import sys
 import struct
-from pathlib import Path
+import logging
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 
-try:
-    import blendfile
-except ImportError:
-    print("Error: blendfile module not found. Make sure blendfile.py is in the same directory.")
-    sys.exit(1)
+import blendfile
+from mesh_exporter import MeshExporter
+
+logger = logging.getLogger("blender_stonefish_plugin.extractor")
 
 
 # IDProperty type constants from Blender
@@ -54,6 +47,7 @@ class BlenderObject:
         # For mesh objects
         mesh_name: Name of mesh data (for custom meshes)
     """
+
     name: str
     object_type: str
     geometry_type: str
@@ -68,12 +62,12 @@ class BlenderObject:
 
     # Optional mesh data
     mesh_name: Optional[str] = None
+    mesh_data_block: Optional[object] = None  # Reference to mesh data block for export
 
 
 class IDPropertyReader:
     """
     Reads Blender custom properties (IDProperties) from .blend files.
-
     blendfile.py doesn't support reading IDPropertyData unions, so we manually
     parse the binary data based on the type field to extract property values.
     """
@@ -94,7 +88,7 @@ class IDPropertyReader:
         """
         try:
             # Get IDProperty pointer from object
-            props_addr = obj_block.get((b'id', b'properties'))
+            props_addr = obj_block.get((b"id", b"properties"))
             if not props_addr or props_addr == 0:
                 return {}
 
@@ -104,7 +98,7 @@ class IDPropertyReader:
                 return {}
 
             # Check if it's a group (IDP_GROUP = 6)
-            prop_type = props_block.get(b'type')
+            prop_type = props_block.get(b"type")
             if prop_type != IDP_GROUP:
                 return {}
 
@@ -143,9 +137,9 @@ class IDPropertyReader:
 
             # Read first and last pointers
             if self.pointer_size == 8:
-                first_ptr = struct.unpack('<Q', self.blend.handle.read(8))[0]
+                first_ptr = struct.unpack("<Q", self.blend.handle.read(8))[0]
             else:
-                first_ptr = struct.unpack('<I', self.blend.handle.read(4))[0]
+                first_ptr = struct.unpack("<I", self.blend.handle.read(4))[0]
 
             # Traverse linked list
             current_ptr = first_ptr
@@ -164,14 +158,14 @@ class IDPropertyReader:
                 # Get next pointer (at offset 0)
                 self.blend.handle.seek(prop_block.file_offset)
                 if self.pointer_size == 8:
-                    current_ptr = struct.unpack('<Q', self.blend.handle.read(8))[0]
+                    current_ptr = struct.unpack("<Q", self.blend.handle.read(8))[0]
                 else:
-                    current_ptr = struct.unpack('<I', self.blend.handle.read(4))[0]
+                    current_ptr = struct.unpack("<I", self.blend.handle.read(4))[0]
 
                 safety_limit -= 1
 
         except Exception as e:
-            print(f"      Warning: Error reading group: {e}")
+            logger.warning(f"Error reading group: {e}")
 
         return properties
 
@@ -179,41 +173,49 @@ class IDPropertyReader:
         """Read single property name and value"""
         try:
             # Get property type and name
-            prop_type = prop_block.get(b'type')
-            name_bytes = prop_block.get(b'name')
-            name = name_bytes.decode('utf-8').rstrip('\x00') if isinstance(name_bytes, bytes) else str(name_bytes).rstrip('\x00')
+            prop_type = prop_block.get(b"type")
+            name_bytes = prop_block.get(b"name")
+            name = (
+                name_bytes.decode("utf-8").rstrip("\x00")
+                if isinstance(name_bytes, bytes)
+                else str(name_bytes).rstrip("\x00")
+            )
 
             # Read value from data union at offset 88
             self.blend.handle.seek(prop_block.file_offset + 88)
 
             if prop_type == IDP_STRING:  # String: data.pointer points to string
                 if self.pointer_size == 8:
-                    string_ptr = struct.unpack('<Q', self.blend.handle.read(8))[0]
+                    string_ptr = struct.unpack("<Q", self.blend.handle.read(8))[0]
                 else:
-                    string_ptr = struct.unpack('<I', self.blend.handle.read(4))[0]
+                    string_ptr = struct.unpack("<I", self.blend.handle.read(4))[0]
 
                 if string_ptr and string_ptr != 0:
                     string_block = self._find_block(string_ptr)
                     if string_block:
-                        prop_len = prop_block.get(b'len')
+                        prop_len = prop_block.get(b"len")
                         self.blend.handle.seek(string_block.file_offset)
-                        value = self.blend.handle.read(prop_len).decode('utf-8').rstrip('\x00')
+                        value = (
+                            self.blend.handle.read(prop_len)
+                            .decode("utf-8")
+                            .rstrip("\x00")
+                        )
                         return (name, value)
 
             elif prop_type == IDP_INT:  # Int: data.val (4 bytes)
-                value = struct.unpack('<i', self.blend.handle.read(4))[0]
+                value = struct.unpack("<i", self.blend.handle.read(4))[0]
                 return (name, str(value))
 
             elif prop_type == IDP_FLOAT:  # Float: data.val (4 bytes)
-                value = struct.unpack('<f', self.blend.handle.read(4))[0]
+                value = struct.unpack("<f", self.blend.handle.read(4))[0]
                 return (name, str(value))
 
             elif prop_type == IDP_DOUBLE:  # Double: 8 bytes
-                value = struct.unpack('<d', self.blend.handle.read(8))[0]
+                value = struct.unpack("<d", self.blend.handle.read(8))[0]
                 return (name, str(value))
 
         except Exception as e:
-            print(f"      Warning: Error reading property: {e}")
+            logger.warning(f"Error reading property: {e}")
 
         return (None, None)
 
@@ -232,14 +234,14 @@ class BlenderExtractor:
             defaults: Default values for material and look
         """
         self.blend_file = blend_file
-        self.defaults = defaults or {'material': 'steel', 'look': 'gray'}
+        self.defaults = defaults or {"material": "steel", "look": "gray"}
         self.blend = None
         self.objects = []
         self.id_reader = None
 
     def extract(self) -> List[BlenderObject]:
         """
-        Extract all static objects from the Blender file.
+        Extract all Stonefish objects from the Blender file.
 
         Returns:
             List of BlenderObject instances
@@ -247,32 +249,33 @@ class BlenderExtractor:
         try:
             self.blend = blendfile.open_blend(self.blend_file)
             self.id_reader = IDPropertyReader(self.blend)
-        except FileNotFoundError as e:
-            print(f"Error: Blend file not found: {self.blend_file}")
-            print(f"  {e}")
-            return []
+
         except AssertionError as e:
-            print(f"Error: Blender file format not supported!")
-            print(f"  File: {self.blend_file}")
-            print(f"  The blendfile.py library doesn't support Blender 5.0+ format yet.")
-            print(f"  Please save your .blend file in an older format:")
-            print(f"    1. In Blender: File → Save As")
-            print(f"    2. Look for format dropdown (near filename or bottom)")
-            print(f"    3. Select 'Blender 2.93' or 'Blender 3.6'")
-            print(f"    4. Save and try again")
-            print(f"\n  Or export your scene and re-import in Blender 3.6 to convert.")
+            logger.error("Blender file format not supported!")
+            logger.error(f"File: {self.blend_file}")
+            logger.error(
+                "The blendfile.py library doesn't support Blender 5.0+ format yet."
+            )
+            logger.error("Please save your .blend file in an older format:")
+            logger.error("  1. In Blender: File → Save As")
+            logger.error("  2. Look for format dropdown (near filename or bottom)")
+            logger.error("  3. Select 'Blender 2.93' or 'Blender 3.6'")
+            logger.error("  4. Save and try again")
+            logger.error(
+                "\n  Or export your scene and re-import in Blender 3.6 to convert."
+            )
             return []
         except Exception as e:
-            print(f"Error opening blend file: {self.blend_file}")
-            print(f"  Exception type: {type(e).__name__}")
-            print(f"  Exception message: {e}")
+            logger.error(f"Error opening blend file: {self.blend_file}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception message: {e}")
             import traceback
+
             traceback.print_exc()
             return []
 
         # Get all object blocks directly
-        object_blocks = self.blend.find_blocks_from_code(b'OB')
-
+        object_blocks = self.blend.find_blocks_from_code(b"OB")
 
         # Extract each object
         for obj_block in object_blocks:
@@ -281,11 +284,11 @@ class BlenderExtractor:
                 self.objects.append(blender_obj)
 
         if len(self.objects) == 0:
-            print("\n⚠ No STATIC objects found!")
-            print("  Make sure your objects are named with 'STATIC' prefix")
-            print("  Example: STATIC_Ground, STATIC_Wall1, etc.")
+            logger.warning("No SF objects found!")
+            logger.warning("Make sure your objects are named with 'SF' prefix")
+            logger.warning("Example: SF_Ground, SF_Wall1, etc.")
 
-        print(f"✓ Extracted {len(self.objects)} STATIC objects from Blender file")
+        logger.info(f"Extracted {len(self.objects)} SF objects from Blender file")
         return self.objects
 
     def _extract_scene_objects(self, scene_block) -> List[BlenderObject]:
@@ -294,22 +297,22 @@ class BlenderExtractor:
 
         # Get scene data from block
         try:
-            scene = scene_block.get_pointer((b'Scene', b'id'))
+            scene = scene_block.get_pointer((b"Scene", b"id"))
         except:
             scene = scene_block
 
         # Get scene name for logging
-        scene_name = self._get_string_property(scene, 'id.name')
+        scene_name = self._get_string_property(scene, "id.name")
         if scene_name:
             scene_name = scene_name[2:]  # Remove "SC" prefix
-            print(f"  Processing scene: {scene_name}")
+            logger.info(f"Processing scene: {scene_name}")
 
         # Iterate through objects in scene
         try:
             # Try to get objects collection from scene
-            objects_collection = scene.get('object')
+            objects_collection = scene.get("object")
             if objects_collection is None:
-                print("    No objects found in scene")
+                logger.info("No objects found in scene")
                 return scene_objects
 
             for obj_ref in objects_collection:
@@ -324,7 +327,7 @@ class BlenderExtractor:
                     scene_objects.append(blender_obj)
 
         except Exception as e:
-            print(f"    Error extracting objects: {e}")
+            logger.warning(f"Error extracting objects: {e}")
 
         return scene_objects
 
@@ -332,7 +335,7 @@ class BlenderExtractor:
         """
         Extract data from a single Blender object block.
 
-        Only processes objects with names starting with "STATIC".
+        Only processes objects with names starting with "SF".
         Reads geometry type, material, and look from custom properties.
 
         Args:
@@ -343,58 +346,65 @@ class BlenderExtractor:
         """
         try:
             # Get object name - using the same pattern as simple_get_objects.py
-            name_data = block.get((b'id', b'name'))
+            name_data = block.get((b"id", b"name"))
             if isinstance(name_data, bytes):
-                name = name_data.decode('utf-8').rstrip('\x00')[2:]  # Remove OB prefix
+                name = name_data.decode("utf-8").rstrip("\x00")[2:]  # Remove OB prefix
             else:
-                name = str(name_data).rstrip('\x00')[2:]
+                name = str(name_data).rstrip("\x00")[2:]
 
-            # FILTER: Only process objects starting with "STATIC"
-            if not name.startswith('STATIC'):
-                # Silently skip non-STATIC objects
+            # FILTER: Only process objects starting with "SF"
+            if not name.startswith("SF"):
+                # Silently skip non-SF objects
                 return None
 
             # Get object type
-            obj_type = block.get(b'type')
+            obj_type = block.get(b"type")
             obj_type_name = self._get_object_type_name(obj_type)
 
             # Skip non-mesh objects for now (cameras, lights, etc.)
-            if obj_type_name not in ['MESH', 'EMPTY', 'CURVE']:
-                print(f"    Skipping {name} (type: {obj_type_name})")
+            if obj_type_name not in ["MESH", "EMPTY", "CURVE"]:
+                logger.debug(f"Skipping {name} (type: {obj_type_name})")
                 return None
 
             # Get transform data - using simple pattern
-            location = tuple(block.get(b'loc'))
-            rotation = tuple(block.get(b'rot'))  # in radians
-            scale = tuple(block.get(b'size'))
+            location = tuple(block.get(b"loc"))
+            rotation = tuple(block.get(b"rot"))  # in radians
+            scale = tuple(block.get(b"size"))
             dimensions = self._get_dimensions(block)
 
             # Read custom properties
             custom_props = self.id_reader.read_properties(block)
 
             # Required: geometry_type (plane, cylinder, box, sphere, mesh)
-            geometry_type_raw = custom_props.get('geometry_type')
+            geometry_type_raw = custom_props.get("geometry_type")
             if not geometry_type_raw:
-                print(f"    ⚠ Skipping {name}: missing 'geometry_type' custom property")
+                logger.warning(
+                    f"Skipping {name}: missing 'geometry_type' custom property"
+                )
                 return None
             geometry_type = geometry_type_raw.upper()
 
             # Required: material and look
-            material = custom_props.get('material')
-            look = custom_props.get('look')
+            material = custom_props.get("material")
+            look = custom_props.get("look")
 
             # Use defaults if not specified
             if not material:
-                material = self.defaults.get('material', 'steel')
-                print(f"    ⚠ {name}: using default material '{material}'")
+                material = self.defaults.get("material", "steel")
+                logger.warning(f"{name}: using default material '{material}'")
             if not look:
-                look = self.defaults.get('look', 'gray')
-                print(f"    ⚠ {name}: using default look '{look}'")
+                look = self.defaults.get("look", "gray")
+                logger.warning(f"{name}: using default look '{look}'")
 
             # Get mesh name for custom meshes
             mesh_name = None
-            if geometry_type == 'MESH':
+            mesh_data_block = None
+            if geometry_type == "MESH":
                 mesh_name = self._get_mesh_name(block)
+                # Get mesh data block for export
+                data_ptr = block.get(b"data")
+                if data_ptr and data_ptr != 0:
+                    mesh_data_block = self.blend.find_block_from_offset(data_ptr)
 
             blender_obj = BlenderObject(
                 name=name,
@@ -406,43 +416,44 @@ class BlenderExtractor:
                 dimensions=dimensions,
                 material=material,
                 look=look,
-                mesh_name=mesh_name
+                mesh_name=mesh_name,
+                mesh_data_block=mesh_data_block,
             )
 
-            print(f"    ✓ {name} [{geometry_type}] - material:{material}, look:{look}")
+            logger.info(f"{name} [{geometry_type}] - material:{material}, look:{look}")
             return blender_obj
 
         except Exception as e:
-            print(f"    Error extracting object: {e}")
+            logger.error(f"Error extracting object: {e}")
             return None
 
     def _get_object_type_name(self, obj_type: int) -> str:
         """Convert object type integer to name"""
         type_map = {
-            0: 'EMPTY',
-            1: 'MESH',
-            2: 'CURVE',
-            4: 'SURFACE',
-            5: 'META',
-            6: 'FONT',
-            10: 'LAMP',
-            11: 'CAMERA',
-            12: 'SPEAKER',
-            25: 'ARMATURE',
-            26: 'LATTICE',
+            0: "EMPTY",
+            1: "MESH",
+            2: "CURVE",
+            4: "SURFACE",
+            5: "META",
+            6: "FONT",
+            10: "LAMP",
+            11: "CAMERA",
+            12: "SPEAKER",
+            25: "ARMATURE",
+            26: "LATTICE",
         }
-        return type_map.get(obj_type, 'UNKNOWN')
+        return type_map.get(obj_type, "UNKNOWN")
 
     def _get_dimensions(self, block) -> Tuple[float, float, float]:
         """Get object dimensions (bounding box)"""
         try:
             # Get mesh data
-            data = block.get(b'data')
+            data = block.get(b"data")
             if data:
                 data_obj = data.dereference()
                 if data_obj:
                     # Try to get bounding box
-                    bb = data_obj.get(b'bb')
+                    bb = data_obj.get(b"bb")
                     if bb:
                         # Calculate dimensions from bounding box
                         min_x = min(v[0] for v in bb)
@@ -453,17 +464,17 @@ class BlenderExtractor:
                         max_z = max(v[2] for v in bb)
 
                         # Apply scale
-                        scale = tuple(block.get(b'size'))
+                        scale = tuple(block.get(b"size"))
                         return (
                             abs(max_x - min_x) * scale[0],
                             abs(max_y - min_y) * scale[1],
-                            abs(max_z - min_z) * scale[2]
+                            abs(max_z - min_z) * scale[2],
                         )
         except:
             pass
 
         # Fallback to scale if dimensions can't be determined
-        scale = tuple(block.get(b'size'))
+        scale = tuple(block.get(b"size"))
         return (scale[0] * 2.0, scale[1] * 2.0, scale[2] * 2.0)
 
         return None
@@ -471,15 +482,15 @@ class BlenderExtractor:
     def _get_mesh_name(self, block) -> Optional[str]:
         """Get the name of the mesh data"""
         try:
-            data = block.get(b'data')
+            data = block.get(b"data")
             if data:
                 data_obj = data.dereference()
                 if data_obj:
-                    mesh_name_data = data_obj.get((b'id', b'name'))
+                    mesh_name_data = data_obj.get((b"id", b"name"))
                     if mesh_name_data:
-                        if hasattr(mesh_name_data, 'decode'):
-                            mesh_name = mesh_name_data.decode('utf-8').rstrip('\x00')
-                            if mesh_name.startswith('ME'):
+                        if hasattr(mesh_name_data, "decode"):
+                            mesh_name = mesh_name_data.decode("utf-8").rstrip("\x00")
+                            if mesh_name.startswith("ME"):
                                 return mesh_name[2:]  # Remove "ME" prefix
                             return mesh_name
                         return str(mesh_name_data)
@@ -488,64 +499,43 @@ class BlenderExtractor:
 
         return None
 
-    def _infer_geometry_type(self, obj, name: str, dimensions: Tuple[float, float, float]) -> str:
+    def export_mesh_to_obj(
+        self,
+        mesh_data_block,
+        output_path: str,
+        scale: float = 1.0,
+        transform_coords: bool = True,
+    ) -> bool:
         """
-        Infer Stonefish geometry type from Blender object.
+        Export mesh data to OBJ file format using MeshExporter.
 
-        Priority:
-        1. Name-based inference (PLANE_, CYLINDER_, BOX_, SPHERE_ prefix)
-        2. Dimension-based inference (flat = plane, equal dims = sphere, etc.)
-        3. Default to MESH for complex geometry
+        Supports both legacy (pre-3.0) and modern (3.0+) Blender formats.
 
         Args:
-            obj: Blender object
-            name: Object name
-            dimensions: Object dimensions
+            mesh_data_block: Blender mesh data block
+            output_path: Path to output .obj file
+            scale: Scale factor to apply to vertices
+            transform_coords: Apply Blender to Stonefish coordinate transformation
 
         Returns:
-            Geometry type: PLANE, CYLINDER, BOX, SPHERE, or MESH
+            True if successful, False otherwise
         """
-        # Name-based inference
-        name_upper = name.upper()
-        if name_upper.startswith('PLANE') or 'GROUND' in name_upper:
-            return 'PLANE'
-        if name_upper.startswith('CYLINDER') or name_upper.startswith('CYL'):
-            return 'CYLINDER'
-        if name_upper.startswith('BOX') or name_upper.startswith('CUBE'):
-            return 'BOX'
-        if name_upper.startswith('SPHERE') or name_upper.startswith('BALL'):
-            return 'SPHERE'
+        if not mesh_data_block:
+            logger.error("No mesh data block provided")
+            return False
 
-        # Dimension-based inference
-        x, y, z = dimensions
-        tolerance = 0.01
+        if not self.blend:
+            logger.error("Blend file not loaded")
+            return False
 
-        # Sphere: all dimensions roughly equal
-        if abs(x - y) < tolerance and abs(y - z) < tolerance and abs(x - z) < tolerance:
-            if x > 0.1:  # Avoid tiny objects
-                return 'SPHERE'
+        try:
+            exporter = MeshExporter(self.blend)
+            return exporter.export_to_obj(
+                mesh_data_block, output_path, scale, transform_coords
+            )
+        except Exception as e:
+            logger.error(f"Error during mesh export: {e}")
+            import traceback
 
-        # Plane: one dimension much smaller than others
-        if z < 0.01 and x > 0.1 and y > 0.1:
-            return 'PLANE'
-
-        # Cylinder: two dimensions equal, one different
-        if abs(x - y) < tolerance and abs(x - z) > tolerance:
-            return 'CYLINDER'
-
-        # Default to mesh for complex shapes
-        return 'MESH'
-
-    def filter_objects(self, filter_func) -> List[BlenderObject]:
-        """
-        Filter extracted objects using a custom function.
-
-        Args:
-            filter_func: Function that takes BlenderObject and returns bool
-
-        Returns:
-            Filtered list of objects
-        """
-        return [obj for obj in self.objects if filter_func(obj)]
-
-
+            traceback.print_exc()
+            return False

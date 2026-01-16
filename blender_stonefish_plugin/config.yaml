@@ -180,27 +180,8 @@ environment:
 # ============================================================================
 # Coordinate Transformation
 # ============================================================================
-coordinates:
-
-  transform_coordinates: true
-
-  ground_z_offset: 0.0
-
-# ============================================================================
-# Ground Plane (Optional)
-# ============================================================================
-ground:
-  # Automatically add ground plane to scenario
-  enabled: true
-
-  # Ground plane properties
-  name: "Ground"
-  material: "concrete"
-  look: "gray"
-
-  # Ground position (Z should typically be 0 for ground level)
-  position: [0.0, 0.0, 0.0]  # [x, y, z]
-  rotation: [0.0, 0.0, 0.0]  # [roll, pitch, yaw] in radians
+# Blender (X=right, Y=forward, Z=up) is automatically transformed to
+# Stonefish (X=forward, Y=left, Z=up). No configuration needed.
 
 # ============================================================================
 # Output Settings

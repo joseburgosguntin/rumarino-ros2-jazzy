@@ -38,8 +38,17 @@
 		<sun azimuth="0.0" elevation="60.0" />
 	</environment>
 	<static name="STATIC_CUBE1" type="box">
-		<dimensions xyz="3.6275 3.6275 3.6275" />
-		<world_transform rpy="-0.17888 -6.61231 0.15845" xyz="5.17689 -1.37975 1.66466" />
+		<dimensions xyz="0.4586 0.4586 0.4586" />
+		<world_transform rpy="0.00000 -0.00000 0.00000" xyz="-2.63891 0.28155 1.18395" />
+		<material name="steel" />
+		<look name="gray" />
+	</static>
+	<static name="STATIC_hydrus_unibody" type="model">
+		<physical>
+			<mesh filename="models/STATIC_hydrus_unibody.obj" scale="0.0100" />
+			<origin rpy="0.0000 0.0000 0.0000" xyz="0.0000 0.0000 0.0000" />
+		</physical>
+		<world_transform rpy="-0.00000 -1.57080 0.00000" xyz="-3.78534 -0.83794 2.16032" />
 		<material name="steel" />
 		<look name="gray" />
 	</static>
