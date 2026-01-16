@@ -32,13 +32,11 @@ def setup_logging(level=logging.INFO, log_file=None):
         fmt="[%(asctime)s] %(levelname)-8s %(name)s - %(message)s", datefmt="%H:%M:%S"
     )
 
-    # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # File handler (optional)
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(level)
@@ -48,10 +46,8 @@ def setup_logging(level=logging.INFO, log_file=None):
     return logger
 
 
-# Initialize logging with default settings
 setup_logging()
 
-# Expose main classes
 from .blender_extractor import BlenderExtractor, BlenderObject
 from .main import ConfigLoader, StonefishScenarioBuilder
 

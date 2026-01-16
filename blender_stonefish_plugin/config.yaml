@@ -57,6 +57,9 @@ materials:
     restitution: 0.2
     magnetic: 0.0
 
+
+
+
 # ============================================================================
 # Friction Table
 # ============================================================================
@@ -74,6 +77,9 @@ friction:
     - [concrete, concrete, 0.8, 0.6]
     - [rubber, steel, 0.8, 0.6]
     - [rubber, concrete, 0.9, 0.7]
+
+
+
 
 # ============================================================================
 # Looks (Visual Appearance)
@@ -177,25 +183,6 @@ environment:
     azimuth: 0.0              # Sun azimuth angle in degrees
     elevation: 60.0           # Sun elevation angle in degrees
 
-# ============================================================================
-# Coordinate Transformation
-# ============================================================================
-# Blender (X=right, Y=forward, Z=up) is automatically transformed to
-# Stonefish (X=forward, Y=left, Z=up). No configuration needed.
-
-# ============================================================================
-# Output Settings
-# ============================================================================
-output:
-  indent: "\t"
-  float_precision: 5
-
-  include_header: true
-  include_materials: true
-  include_looks: true
-  include_friction: true
-
-  default_output: "output.scn"
 
 # ============================================================================
 # Mesh Export Settings
@@ -203,12 +190,9 @@ output:
 meshes:
   # Directory for exported mesh files (relative to scenario file)
   output_dir: "models"
-
   # Mesh export format
   format: "obj"
-
   # Scale factor for mesh export (Blender units to meters)
-  scale: 0.01
-
+  scale: 0.75
   # Coordinate system transformation for meshes
   transform_mesh_coords: true
