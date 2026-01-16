@@ -2,8 +2,42 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "lldb",
+            "name": "(gdb) UnderwaterTest",
+            "type": "cppdbg",
             "request": "launch",
+            "program": "${workspaceFolder}/vendor/stonefish/build/Tests/UnderwaterTest",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/vendor/stonefish/build",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch depth_node",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/install/neural_depth_ros2/lib/neural_depth_ros2/depth_node",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/install/neural_depth/lib:/usr/local/onnxruntime/lib:/usr/local/cuda-12.9/targets/x86_64-linux/lib:${env:LD_LIBRARY_PATH}"
+                }
             "name": "Debug",
             "cargo": ["run"],
             "args": [
@@ -12,7 +46,49 @@
             "mission_name:=prequalify",
             "env_file_name:=hydrus_env.scn"
             ],
-            "cwd": "${fileDirname}"
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "colcon: build neural_depth_ros2",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "(gdb) Attach to depth_node",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/install/neural_depth_ros2/lib/neural_depth_ros2/depth_node",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "/opt/ros/jazzy/lib/python3.12/site-packages:${workspaceFolder}/install/interfaces/local/lib/python3.12/dist-packages"
+            }
+        },
+        {
+            "name": "ROS2: Launch File",
+            "type": "ros",
+            "request": "launch",
+            "target": "${file}"
         }
     ]
 }

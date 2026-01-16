@@ -1,0 +1,198 @@
+# Stonefish Scenario Configuration
+# This file defines materials, looks, friction, and environment settings
+# that are not practical to configure in Blender
+
+# ============================================================================
+# Materials
+# ============================================================================
+materials:
+  # Standard materials with physical properties
+  pvc:
+    density: 150.0      # kg/m³
+    restitution: 0.4     # Bounciness (0.0 to 1.0)
+    magnetic: 0.0        # <0 ferromagnetic, 0 nonmagnetic, >0 magnet
+
+  steel:
+    density: 7810.0
+    restitution: 0.9
+    magnetic: -1.0
+
+  aluminium:
+    density: 2700.0
+    restitution: 0.8
+    magnetic: 0.0
+
+  acrylic:
+    density: 1200.0
+    restitution: 0.3
+    magnetic: 0.0
+
+  hdpe:
+    density: 950.0
+    restitution: 0.4
+    magnetic: 0.0
+
+  abs:
+    density: 1040.0
+    restitution: 0.4
+    magnetic: 0.0
+
+  rubber:
+    density: 1100.0
+    restitution: 0.8
+    magnetic: 0.0
+
+  wood:
+    density: 700.0
+    restitution: 0.4
+    magnetic: 0.0
+
+  foam:
+    density: 100.0
+    restitution: 0.2
+    magnetic: 0.0
+
+  concrete:
+    density: 2400.0
+    restitution: 0.2
+    magnetic: 0.0
+
+
+
+
+# ============================================================================
+# Friction Table
+# ============================================================================
+friction:
+  # Define friction between material pairs
+  # Format: [material1, material2, static_friction, dynamic_friction]
+  pairs:
+    - [aluminium, aluminium, 0.7, 0.5]
+    - [steel, steel, 0.4, 0.2]
+    - [aluminium, steel, 0.6, 0.4]
+    - [pvc, pvc, 0.4, 0.2]
+    - [pvc, steel, 0.5, 0.3]
+    - [pvc, aluminium, 0.5, 0.3]
+    - [concrete, steel, 0.6, 0.5]
+    - [concrete, concrete, 0.8, 0.6]
+    - [rubber, steel, 0.8, 0.6]
+    - [rubber, concrete, 0.9, 0.7]
+
+
+
+
+# ============================================================================
+# Looks (Visual Appearance)
+# ============================================================================
+looks:
+  # PBR (Physically Based Rendering) properties
+  # color: RGB values (0.0 to 1.0)
+  # roughness: Surface roughness (0.0 = smooth/glossy, 1.0 = rough/matte)
+  # metalness: Metallic property (0.0 = dielectric, 1.0 = metal)
+  # reflectivity: Reflection strength (0.0 to 1.0)
+
+  white:
+    color: [1.0, 1.0, 1.0]
+    roughness: 0.3
+    metalness: 0.0
+    reflectivity: 0.5
+
+  black:
+    color: [0.0, 0.0, 0.0]
+    roughness: 0.1
+    metalness: 0.0
+    reflectivity: 0.5
+
+  gray:
+    color: [0.5, 0.5, 0.5]
+    roughness: 0.3
+    metalness: 0.0
+    reflectivity: 0.5
+
+  red:
+    color: [1.0, 0.0, 0.0]
+    roughness: 0.3
+    metalness: 0.0
+    reflectivity: 0.5
+
+  green:
+    color: [0.0, 1.0, 0.0]
+    roughness: 0.3
+    metalness: 0.0
+    reflectivity: 0.5
+
+  blue:
+    color: [0.0, 0.0, 1.0]
+    roughness: 0.3
+    metalness: 0.0
+    reflectivity: 0.5
+
+  yellow:
+    color: [1.0, 1.0, 0.0]
+    roughness: 0.1
+    metalness: 0.0
+    reflectivity: 0.5
+
+  orange:
+    color: [1.0, 0.5, 0.0]
+    roughness: 0.1
+    metalness: 0.0
+    reflectivity: 0.5
+
+  clear:
+    color: [0.9, 0.9, 0.9]
+    roughness: 0.1
+    metalness: 0.0
+    reflectivity: 0.8
+
+  dark_green:
+    color: [0.0, 0.2, 0.0]
+    roughness: 0.1
+    metalness: 0.1
+    reflectivity: 0.5
+
+# ============================================================================
+# Environment Settings
+# ============================================================================
+environment:
+  # North-East-Down coordinate frame reference
+  ned:
+    latitude: 0.0
+    longitude: 0.0
+
+  # Ocean configuration
+  ocean:
+    enabled: true
+    water_density: 1025.0      # kg/m³ (saltwater)
+    jerlov: 0.2                # Water clarity (0.0 to 1.0, lower = clearer)
+    wave_height: 0.0           # Wave height in meters (0.0 = calm)
+    particles: true            # Enable particle effects
+
+    # Current (uniform flow)
+    current:
+      type: uniform
+      velocity: [0.0, 0.0, 0.0]  # [x, y, z] in m/s
+
+  # Atmospheric conditions
+  atmosphere:
+    pressure: 101325.0         # Atmospheric pressure in Pa
+    temperature: 20.0          # Temperature in Celsius
+
+  # Sun/lighting
+  sun:
+    azimuth: 0.0              # Sun azimuth angle in degrees
+    elevation: 60.0           # Sun elevation angle in degrees
+
+
+# ============================================================================
+# Mesh Export Settings
+# ============================================================================
+meshes:
+  # Directory for exported mesh files (relative to scenario file)
+  output_dir: "models"
+  # Mesh export format
+  format: "obj"
+  # Scale factor for mesh export (Blender units to meters)
+  scale: 0.75
+  # Coordinate system transformation for meshes
+  transform_mesh_coords: true
