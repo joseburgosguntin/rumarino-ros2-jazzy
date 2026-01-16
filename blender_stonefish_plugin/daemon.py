@@ -96,15 +96,19 @@ class FileWatcher:
             i = inotify.adapters.Inotify()
 
             for watch_dir in self.watch_dirs:
-                i.add_watch(watch_dir.encode("utf-8"))
+                i.add_watch(watch_dir)
                 logger.info(f"Watching directory: {watch_dir}")
 
             # Watch for modifications, moves, and close-after-write events
             for event in i.event_gen(yield_nones=False):
                 (_, type_names, path, filename) = event
 
-                path_str = path.decode("utf-8")
-                filename_str = filename.decode("utf-8")
+                path_str = path.decode("utf-8") if isinstance(path, bytes) else path
+                filename_str = (
+                    filename.decode("utf-8")
+                    if isinstance(filename, bytes)
+                    else filename
+                )
 
                 # Check if this is a file we care about
                 if (

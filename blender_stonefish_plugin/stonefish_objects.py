@@ -711,11 +711,15 @@ class Environment(ComposableElement):
     Complete environment configuration.
 
     Attributes:
+        ned_latitude: NED frame latitude (default 0.0)
+        ned_longitude: NED frame longitude (default 0.0)
         ocean: Ocean configuration (None = no ocean)
         atmosphere: Atmospheric configuration
         sun: Sun lighting configuration
     """
 
+    ned_latitude: float = 0.0
+    ned_longitude: float = 0.0
     ocean: Optional[Ocean] = None
     atmosphere: Atmosphere = field(default_factory=Atmosphere)
     sun: Sun = field(default_factory=Sun)
@@ -732,6 +736,11 @@ class Environment(ComposableElement):
         """Generate XML for environment"""
         i = self._indent(indent)
         lines = [f"{i}<environment>"]
+
+        # NED coordinates
+        lines.append(
+            f'{self._indent(indent + 1)}<ned latitude="{self.ned_latitude}" longitude="{self.ned_longitude}" />'
+        )
 
         if self.ocean:
             lines.append(self.ocean.generate_xml_string(indent + 1))
@@ -789,19 +798,26 @@ class StonefishScenario(ComposableElement):
             f"{i}<scenario>",
         ]
 
-        # Materials
-        for material in self.materials:
-            lines.append(material.generate_xml_string(indent + 1))
-
-        # Looks
-        for look in self.looks:
-            lines.append(look.generate_xml_string(indent + 1))
-
-        # Friction table
-        lines.append(self.friction_table.generate_xml_string(indent + 1))
-
-        # Environment
+        # Environment (must come first in Stonefish)
         lines.append(self.environment.generate_xml_string(indent + 1))
+
+        # Materials wrapper
+        if self.materials:
+            lines.append(f"{self._indent(indent + 1)}<materials>")
+            for material in self.materials:
+                lines.append(material.generate_xml_string(indent + 2))
+            lines.append(f"{self._indent(indent + 1)}</materials>")
+
+        # Looks wrapper
+        if self.looks:
+            lines.append(f"{self._indent(indent + 1)}<looks>")
+            for look in self.looks:
+                lines.append(look.generate_xml_string(indent + 2))
+            lines.append(f"{self._indent(indent + 1)}</looks>")
+
+        # Friction table (inside materials section, but we'll put it after for now)
+        if self.friction_table and self.friction_table.pairs:
+            lines.append(self.friction_table.generate_xml_string(indent + 1))
 
         # Static objects
         for obj in self.static_objects:

@@ -203,7 +203,7 @@ class StonefishScenarioBuilder:
             # This transformation is always applied as it's the purpose of this tool
             x_sf = blender_obj.location[1]  # Blender Y -> Stonefish X (forward)
             y_sf = -blender_obj.location[0]  # Blender -X -> Stonefish Y (left)
-            z_sf = blender_obj.location[2]  # Blender Z -> Stonefish Z (up)
+            z_sf = -blender_obj.location[2]  # Blender Z -> Stonefish Z (up)
 
             # Rotation transformation (approximate - needs proper rotation matrix conversion)
             r_sf = blender_obj.rotation[
