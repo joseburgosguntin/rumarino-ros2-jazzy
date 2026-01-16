@@ -1,6 +1,10 @@
-use nalgebra::{UnitQuaternion, Vector2, Vector3};
+use nalgebra::{
+    Point3, UnitQuaternion, Vector2, Vector3
+};
 
-use crate::{MapObject, Mission, MissionExecutor, ObjectCls};
+use crate::{
+    MapObject, Mission, MissionExecutor, ObjectCls,
+};
 
 // this could hold some state if necessary
 // like the some sort of queue if a sequence of reactions is necessary
@@ -32,7 +36,7 @@ impl PrecualifyMission {
         // a big number so that any corner is always closer
         const HUGE_NUMBER: f64 = 10000000.0;
 
-        let mut corner_pluss = [Vector3::new(0.0, 0.0, 0.0); 4]; 
+        let mut corner_pluss = [Vector3::new(0.0, 0.0, 0.0); 4];
         let mut starting_corner = Vector2::new(HUGE_NUMBER, HUGE_NUMBER);
         let mut starting_i = usize::MAX;
         let initial_sub_pos = td.pose.load().pos;
@@ -43,7 +47,8 @@ impl PrecualifyMission {
             let rotated_corner = (rot_unit * actual_corner.push(0.0)).xy();
             let pos2d = Vector2::new(object_pos.x, object_pos.y);
             let sub2d = Vector2::new(sub_pose.pos.x, sub_pose.pos.y);
-            let corner_plus = pos2d + rotated_corner + rotated_corner.normalize() * DISTANCE_TO_CORNER;
+            let corner_plus =
+                pos2d + rotated_corner + rotated_corner.normalize() * DISTANCE_TO_CORNER;
             corner_pluss[i] = Vector3::new(corner_plus.x, corner_plus.y, sub_pose.pos.z);
 
             if (corner_plus - sub2d).norm() < starting_corner.norm() {
@@ -60,7 +65,8 @@ impl PrecualifyMission {
 
     fn go_through(&self, td: &MissionExecutor, idx: usize) {
         let sub_pose = td.pose.load();
-        let object = MapObject::from(&td.map.load().objects[idx]);
+        let map = td.map.load();
+        let object = MapObject::from(&map.objects[idx]);
 
         let object_pos = object.bbox.center.pos;
         let object_pos_2d = object_pos.xy();
@@ -74,13 +80,13 @@ impl PrecualifyMission {
         r2r::log_info!("before object_pos", "{object_pos_2d:?}");
         r2r::log_info!("before sub_pos", "{sub_pos_2d:?}");
         r2r::log_info!("before", "{before:?}");
-        td.move_to(before);
 
         let overshoot_2d = object_pos_2d + direction_2d * OVERSHOOT;
         let overshoot = Vector3::new(overshoot_2d.x, overshoot_2d.y, object_pos.z);
 
-        r2r::log_info!("overshoot", "{overshoot:?}");
-        td.move_to(overshoot);
+        let point_list: Vec<Point3<f64>> = vec![before.into(), overshoot.into()];
+
+        td.move_to_points(point_list);
     }
 }
 
@@ -91,6 +97,7 @@ impl Mission for PrecualifyMission {
             ObjectCls::Rectangle | ObjectCls::Cube => self.go_around(td, idx),
             ObjectCls::Gate => self.go_through(td, idx),
             ObjectCls::Shark => (),
+            ObjectCls::Other => (),
         }
     }
 }

@@ -38,6 +38,13 @@
                     "name": "LD_LIBRARY_PATH",
                     "value": "${workspaceFolder}/install/neural_depth/lib:/usr/local/onnxruntime/lib:/usr/local/cuda-12.9/targets/x86_64-linux/lib:${env:LD_LIBRARY_PATH}"
                 }
+            "name": "Debug",
+            "cargo": ["run"],
+            "args": [
+             "--ros-args",
+             "-p",
+            "mission_name:=prequalify",
+            "env_file_name:=hydrus_env.scn"
             ],
             "externalConsole": false,
             "MIMode": "gdb",
