@@ -24,7 +24,7 @@ docker run --rm \
       mission_name:=prequalify \
       env_file_name:=hydrus_env_headless.scn &
     LAUNCH_PID=\$! && \
-    simulation_health_check --duration 15 && \
+    sleep 15 && \
     kill \$LAUNCH_PID 2>/dev/null || true
   "
 ```

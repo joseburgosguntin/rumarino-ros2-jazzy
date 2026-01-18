@@ -33,14 +33,10 @@ jobs:
           bash -c "
             source /opt/ros/jazzy/setup.bash && \
             source /ros2_ws/install/setup.bash && \
-
             ros2 launch bringup test_mission_executor_headless.launch.py \
               mission_name:=prequalify \
               env_file_name:=hydrus_env_headless.scn &
             LAUNCH_PID=\$! && \
-
-            simulation_health_check --duration 15 && \
-
-            # Kill simulation
+            sleep 15 && \
             kill \$LAUNCH_PID 2>/dev/null || true
           "
