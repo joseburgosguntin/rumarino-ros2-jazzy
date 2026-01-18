@@ -23,7 +23,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -f Dockerfile.headless -t rumarino-headless:latest .
+        docker build -t rumarino-headless:latest .
 
     - name: Run headless simulation test
       run: |
