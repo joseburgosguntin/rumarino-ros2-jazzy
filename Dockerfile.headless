@@ -43,7 +43,7 @@ COPY src/interfaces ./src/interfaces
 COPY src/bringup ./src/bringup
 COPY src/controller_stonefish ./src/controller_stonefish
 COPY src/mission_executor ./src/mission_executor
-COPY src/stonefish_ros2 ./src/stonefish_ros2
+COPY vendor/stonefish_ros2 ./src/stonefish_ros2
 COPY vendor/stonefish ./vendor/stonefish
 
 RUN rosdep init || true && \
