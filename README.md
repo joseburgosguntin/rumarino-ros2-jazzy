@@ -92,7 +92,7 @@ source /opt/ros/jazzy/setup.bash
 
 
 # Build packages
-colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 controller_stonefish mission_executor 
+colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 controller_stonefish mission_executor
 
 # Source the workspace
 #Fedora
@@ -101,6 +101,31 @@ source install/setup.sh
 source install/setup.bash
 
 ros2 launch bringup test_mission_executor.launch.py mission_name:=prequalify env_file_name:=hydrus_env.scn
+```
+
+## Test Mission Executer in Docker
+
+
+```bash
+docker build -f Dockerfile.headless -t rumarino-headless:latest .
+
+docker run --rm \
+          --name headless-test \
+          rumarino-headless:latest \
+          bash -c "
+            source /opt/ros/jazzy/setup.bash && \
+            source /ros2_ws/install/setup.bash && \
+
+            ros2 launch bringup test_mission_executor_headless.launch.py \
+              mission_name:=prequalify \
+              env_file_name:=hydrus_env_headless.scn &
+            LAUNCH_PID=\$! && \
+
+            simulation_health_check --duration 15 && \
+
+            # Kill simulation
+            kill \$LAUNCH_PID 2>/dev/null || true
+
 ```
 
 

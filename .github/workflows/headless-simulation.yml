@@ -1,0 +1,46 @@
+name: Headless Simulation Test
+
+on:
+  push:
+    branches: [ main, docker ]
+  pull_request:
+    branches: [ main, docker ]
+  workflow_dispatch:
+
+jobs:
+  test-headless-simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -f Dockerfile.headless -t rumarino-headless:latest .
+
+    - name: Run headless simulation test
+      run: |
+        docker run --rm \
+          --name headless-test \
+          rumarino-headless:latest \
+          bash -c "
+            source /opt/ros/jazzy/setup.bash && \
+            source /ros2_ws/install/setup.bash && \
+
+            ros2 launch bringup test_mission_executor_headless.launch.py \
+              mission_name:=prequalify \
+              env_file_name:=hydrus_env_headless.scn &
+            LAUNCH_PID=\$! && \
+
+            simulation_health_check --duration 15 && \
+
+            # Kill simulation
+            kill \$LAUNCH_PID 2>/dev/null || true
+          "
