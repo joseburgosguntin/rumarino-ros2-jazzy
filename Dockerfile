@@ -71,10 +71,7 @@ RUN bash -lc "source /opt/ros/jazzy/setup.bash && \
 # copy mission_executor files except actual src/mission_executor/src/*
 COPY Cargo.toml Cargo.lock ./
 COPY src/mission_executor/Cargo.toml ./src/mission_executor/Cargo.toml
-COPY src/mission_executor/Cargo.lock ./src/mission_executor/Cargo.lock
 COPY src/mission_executor/CMakeLists.txt ./src/mission_executor/CMakeLists.txt
-COPY src/mission_executor/r2r_cargo.cmake ./src/mission_executor/r2r_cargo.cmake
-COPY src/mission_executor/dummy.c ./src/mission_executor/dummy.c
 
 # add dummy main.rs to src/mission_executor/src/ so cargo allows building mission_executor
 RUN mkdir -p src/mission_executor/src && \ 
