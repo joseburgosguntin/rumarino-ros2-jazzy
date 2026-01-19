@@ -442,7 +442,6 @@ async fn main() {
     td.map.store(Arc::new(map_msg));
     td.new_objects.notify_one();
 
-    r2r::log_info!("", "start spinning!");
     loop {
         node.spin_once(Duration::from_millis(100));
     }
