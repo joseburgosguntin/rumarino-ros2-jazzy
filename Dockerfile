@@ -48,18 +48,21 @@ RUN mkdir -p build && cd build && \
     make install && \
     ldconfig
 
-
-COPY src/interfaces ./src/interfaces
-COPY src/bringup ./src/bringup
-COPY src/controller_stonefish ./src/controller_stonefish
-COPY src/mission_executor ./src/mission_executor
-COPY vendor/stonefish_ros2 ./src/stonefish_ros2
+# copy only package manifests
+COPY src/*/package.xml ./src/
 
 RUN rosdep init || true && \
     rosdep update
 
 RUN bash -c "source /opt/ros/jazzy/setup.bash && \
     rosdep install --from-paths src --ignore-src -r -y || true"
+
+# copy rest of source code
+COPY src/interfaces ./src/interfaces
+COPY src/bringup ./src/bringup
+COPY src/controller_stonefish ./src/controller_stonefish
+COPY src/mission_executor ./src/mission_executor
+COPY vendor/stonefish_ros2 ./src/stonefish_ros2
 
 # Build ROS 2 workspace
 WORKDIR /ros2_ws
