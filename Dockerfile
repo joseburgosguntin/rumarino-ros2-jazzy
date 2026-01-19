@@ -40,16 +40,21 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Create workspace
 WORKDIR /ros2_ws
 COPY vendor/stonefish ./vendor/stonefish
+
 # Build Stonefish library
-WORKDIR /ros2_ws/vendor/stonefish
-RUN mkdir -p build && cd build && \
+RUN cd vendor/stonefish && \
+    mkdir -p build && cd build && \
     cmake .. && \
     make -j$(nproc) && \
     make install && \
     ldconfig
 
-# copy only package manifests
-COPY src/*/package.xml ./src/
+# Copy only package.xml files for dependency caching
+COPY src/interfaces/package.xml ./src/interfaces/package.xml
+COPY src/bringup/package.xml ./src/bringup/package.xml
+COPY src/controller_stonefish/package.xml ./src/controller_stonefish/package.xml
+COPY src/mission_executor/package.xml ./src/mission_executor/package.xml
+COPY vendor/stonefish_ros2/package.xml ./src/stonefish_ros2/package.xml
 
 RUN rosdep init || true && \
     rosdep update
@@ -65,7 +70,6 @@ COPY src/mission_executor ./src/mission_executor
 COPY vendor/stonefish_ros2 ./src/stonefish_ros2
 
 # Build ROS 2 workspace
-WORKDIR /ros2_ws
 RUN bash -c "source /opt/ros/jazzy/setup.bash && \
     colcon build \
     --packages-select interfaces stonefish_ros2 controller_stonefish bringup \
