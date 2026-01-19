@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y \
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
+ENV CARGO_TARGET_DIR=/ros2_ws/target
 
 # Create workspace
 WORKDIR /ros2_ws
@@ -62,20 +63,40 @@ RUN rosdep init || true && \
 RUN bash -c "source /opt/ros/jazzy/setup.bash && \
     rosdep install --from-paths src --ignore-src -r -y || true"
 
-# copy rest of source code
+# build interfaces first
 COPY src/interfaces ./src/interfaces
+RUN bash -lc "source /opt/ros/jazzy/setup.bash && \
+    colcon build --packages-select interfaces --cmake-args -DCMAKE_BUILD_TYPE=Release"
+
+# copy mission_executor files except actual src/mission_executor/src/*
+COPY Cargo.toml Cargo.lock ./
+COPY src/mission_executor/Cargo.toml ./src/mission_executor/Cargo.toml
+COPY src/mission_executor/Cargo.lock ./src/mission_executor/Cargo.lock
+COPY src/mission_executor/CMakeLists.txt ./src/mission_executor/CMakeLists.txt
+COPY src/mission_executor/r2r_cargo.cmake ./src/mission_executor/r2r_cargo.cmake
+COPY src/mission_executor/dummy.c ./src/mission_executor/dummy.c
+
+# add dummy main.rs to src/mission_executor/src/ so cargo allows building mission_executor
+RUN mkdir -p src/mission_executor/src && \ 
+    printf "fn main() {}" > src/mission_executor/src/main.rs
+
+# fetch and build dependencies for mission_executor
+RUN bash -lc "source /opt/ros/jazzy/setup.bash && \
+    source install/setup.bash && \
+    colcon build --packages-select mission_executor --cmake-args -DCMAKE_BUILD_TYPE=Release"
+
 COPY src/bringup ./src/bringup
 COPY src/controller_stonefish ./src/controller_stonefish
-COPY src/mission_executor ./src/mission_executor
 COPY vendor/stonefish_ros2 ./src/stonefish_ros2
 
-# Build ROS 2 workspace
+# build ROS 2 workspace except interfaces and mission_executor
 RUN bash -c "source /opt/ros/jazzy/setup.bash && \
     colcon build \
-    --packages-select interfaces stonefish_ros2 controller_stonefish bringup \
+    --packages-select stonefish_ros2 controller_stonefish bringup \
     --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
-# Build mission_executor separately (needs symlink for Cargo target directory)
+# build mission_executor with actual source code
+COPY src/mission_executor/src ./src/mission_executor/src
 RUN ln -sf /ros2_ws/src/mission_executor/target /ros2_ws/target && \
     bash -c "source /opt/ros/jazzy/setup.bash && \
     source install/setup.bash && \
