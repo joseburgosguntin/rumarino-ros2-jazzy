@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Build artifacts
+build/
+install/
+log/
+target/
+.cache/
+**/build/
+**/install/
+**/log/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Documentation
+*.md
+!DOCKER_HEADLESS.md
+
+# Old files
+old/
+
+# Blender plugin (not needed for simulation)
+blender_stonefish_plugin/
+
+# Unnecessary packages for headless simulation
+src/controller_arduino/
+src/neural_depth/
+src/neural_depth_ros2/
+src/rviz_plugin_zed_od/
+src/zed*/
+
+# Compiled files
+compile_commands.json
+*.o
+*.so
+*.a
+
+# Scripts not needed in Docker
+run_example.sh
+setup_clangd.sh

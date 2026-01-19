@@ -1,15 +1,36 @@
 
-## Simulation:
-
+## Simulation
 
 ### Clone and go in repo
 ```sh
-git clone --recurisve git@github.com:joseburgosguntin/rumarino-ros2-jazzy.git
+git clone --recursive git@github.com:joseburgosguntin/rumarino-ros2-jazzy.git
 cd ./rumarino-ros2-jazzy
 ```
 
+## Quick Start with Docker (Recommended for CI/CD)
 
-## System Dependencies
+```bash
+# Build the Docker image
+docker build -t rumarino-headless:latest .
+
+# Run headless simulation test
+docker run --rm \
+  --name headless-test \
+  rumarino-headless:latest \
+  bash -c "
+    source /opt/ros/jazzy/setup.bash && \
+    source /ros2_ws/install/setup.bash && \
+    ros2 launch bringup test_mission_executor_headless.launch.py \
+      mission_name:=prequalify \
+      env_file_name:=hydrus_env_headless.scn &
+    LAUNCH_PID=\$! && \
+    sleep 15 && \
+    kill \$LAUNCH_PID 2>/dev/null || true
+  "
+```
+
+## Local Development Setup
+ System Dependencies
 
 ### Required Tools
 - Python 3
@@ -78,8 +99,9 @@ sudo make install
 cd ../../../../../
 ```
 
-## Test mission\_executor
+## Test mission_executor
 
+### With GUI (local development)
 ```sh
 # Navigate to the workspace
 cd ~/ros2_ws/rumarino-ros2-jazzy
@@ -90,18 +112,19 @@ source /usr/lib64/ros2-jazzy/setup.zsh
 # Ubuntu:
 source /opt/ros/jazzy/setup.bash
 
-
 # Build packages
-colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 controller_stonefish mission_executor 
+colcon build --packages-select interfaces bringup Stonefish stonefish_ros2 controller_stonefish mission_executor
 
 # Source the workspace
-#Fedora
+# Fedora
 source install/setup.sh
-#Ubuntu
+# Ubuntu
 source install/setup.bash
 
+# Run with GUI
 ros2 launch bringup test_mission_executor.launch.py mission_name:=prequalify env_file_name:=hydrus_env.scn
 ```
+
 
 
 ## Computer Vision
